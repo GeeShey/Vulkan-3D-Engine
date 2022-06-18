@@ -8,7 +8,7 @@ using namespace H2B;
 class Level_Data {
 
 private:
-	unsigned int masterMeshIdCount = 0;
+	unsigned int masterMeshIdCount = 1;
 
 public:
 
@@ -23,7 +23,7 @@ public:
 
 	struct LEVEL_MODEL_DATA
 	{
-		int instanceCount = 0;
+		int instanceCount = 1;
 		std::vector<GW::MATH::GMATRIXF> worldMatrices;
 		H2B::Parser parser;
 		unsigned int indexOffset = 0;//UNUSED
@@ -111,16 +111,16 @@ public:
 						tempData.vertexOffset = masterVertices.size();
 						tempData.worldMatrices.push_back(temp);
 						LevelDataMap[objName] = tempData;
-						LevelDataMap[objName].meshId = masterMeshIdCount;
-						masterMeshIdCount++;
+						//LevelDataMap[objName].meshId = masterMeshIdCount;
+						//masterMeshIdCount++;
 					}
 					else
 					{
 						//encountered an instance
 						LevelDataMap[objName].worldMatrices.push_back(temp);
 						++LevelDataMap[objName].instanceCount;
-						LevelDataMap[objName].meshId = masterMeshIdCount;
-						masterMeshIdCount++;
+						//LevelDataMap[objName].meshId = masterMeshIdCount;
+						//masterMeshIdCount++;
 					}
 
 					for (int i = 0; i < tempData.parser.materialCount; i++) {
@@ -163,7 +163,7 @@ public:
 
 			std::cout << "No of .h2b files parsed = " << DEBUG_FileParsedCount << "\n";
 			std::cout << "No of unique materials extracted = " << DEBUG_UniqueMaterialsExtracted << "\n";
-			std::cout << "No of meshses parsed(exclusing submeshes) = " << DEBUG_MeshesParsed << "\n";
+			std::cout << "No of objects in scene = " << DEBUG_MeshesParsed << "\n";
 			std::cout << "No of unique submeshes parsed = " << DEBUG_SubMeshesParsed << "\n";
 			std::cout << "No of vertices in scene = " << masterVertices.size() << "\n";
 

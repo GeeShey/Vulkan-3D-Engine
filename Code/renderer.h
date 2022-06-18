@@ -451,14 +451,15 @@ public:
 			smd.matricies[i] = GW::MATH::GIdentityMatrixF;
 		}
 
+		int j = 0;
 		for (auto& iter : ld1.LevelDataMap)
 		{
-			int j = 0;
-			for (int i = 0; i < iter.second.worldMatrices.size(); ++i)
+			iter.second.meshId = j;
+ 			for (int i = 0; i < iter.second.worldMatrices.size(); ++i)
 			{
-				smd.matricies[iter.second.meshId + i] = iter.second.worldMatrices[i];
+ 				smd.matricies[j] = iter.second.worldMatrices[i];
+				j++;
 			}
-			j++;
 		}
 
 		smd.sunAmbient = sunAmbient;
@@ -819,17 +820,28 @@ public:
 			pipelineLayout, 0, 1, &descriptorSet[i], 0, nullptr);
 		}
 
-		unsigned int meshIndex = 0;
-		unsigned int InstanceCount = 0;
 		GvkHelper::write_to_buffer(device, storageBufferMemory[currentBuffer], &smd, sizeof(SHADER_MODEL_DATA));
 		for (auto iter : ld1.LevelDataMap)
 		{
 			for (auto submesh : iter.second.parser.meshes)
 			{
-				int pushValues[] = { iter.second.meshId ,iter.second.materialId };
- 				vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT, 0, 8, pushValues);
-				vkCmdDrawIndexed(commandBuffer, submesh.drawInfo.indexCount, iter.second.instanceCount, submesh.drawInfo.indexOffset, iter.second.vertexOffset, 0);
-				InstanceCount += iter.second.instanceCount;
+				if (iter.second.instanceCount > 1) {
+
+					for (int i = 0; i < iter.second.instanceCount; i++) {
+
+						int pushValues[] = { iter.second.meshId + i  ,iter.second.materialId };
+ 						vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT, 0, 8, pushValues);
+						vkCmdDrawIndexed(commandBuffer, submesh.drawInfo.indexCount, iter.second.instanceCount, submesh.drawInfo.indexOffset, iter.second.vertexOffset,  0);
+					}
+
+				}
+				else {
+
+					int pushValues[] = { iter.second.meshId ,iter.second.materialId };
+					vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, 8, pushValues);
+					vkCmdDrawIndexed(commandBuffer, submesh.drawInfo.indexCount, iter.second.instanceCount, submesh.drawInfo.indexOffset, iter.second.vertexOffset, 0);
+
+				}
 				
 			}
 		}
