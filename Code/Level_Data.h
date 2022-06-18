@@ -17,7 +17,7 @@ public:
 	int DEBUG_UniqueMaterialsExtracted = 0;
 	int DEBUG_MeshesParsed = 0;
 	int DEBUG_SubMeshesParsed = 0;
-	int DEBUG_VertexCount = 0;
+	int DEBUG_VisibleVertexCount = 0;
 
 
 
@@ -111,16 +111,25 @@ public:
 						tempData.vertexOffset = masterVertices.size();
 						tempData.worldMatrices.push_back(temp);
 						LevelDataMap[objName] = tempData;
-						//LevelDataMap[objName].meshId = masterMeshIdCount;
-						//masterMeshIdCount++;
+						
+						for (int i = 0; i < LevelDataMap[objName].parser.vertices.size(); i++) {
+							masterVertices.push_back(LevelDataMap[objName].parser.vertices[i]);
+						}
+
+						for (int i = 0; i < LevelDataMap[objName].parser.indices.size(); i++) {
+							masterIndices.push_back(LevelDataMap[objName].parser.indices[i]);
+						}
+
+						DEBUG_VisibleVertexCount += LevelDataMap[objName].parser.vertexCount;
+
 					}
 					else
 					{
 						//encountered an instance
 						LevelDataMap[objName].worldMatrices.push_back(temp);
 						++LevelDataMap[objName].instanceCount;
-						//LevelDataMap[objName].meshId = masterMeshIdCount;
-						//masterMeshIdCount++;
+						DEBUG_VisibleVertexCount += LevelDataMap[objName].parser.vertexCount;
+						
 					}
 
 					for (int i = 0; i < tempData.parser.materialCount; i++) {
@@ -140,13 +149,9 @@ public:
 					}
 
 
-					for (int i = 0; i < LevelDataMap[objName].parser.vertices.size(); i++) {
-						masterVertices.push_back(LevelDataMap[objName].parser.vertices[i]);
-					}
+					
 
-					for (int i = 0; i < LevelDataMap[objName].parser.indices.size(); i++) {
-						masterIndices.push_back(LevelDataMap[objName].parser.indices[i]);
-					}
+					
 
 
 
@@ -163,9 +168,11 @@ public:
 
 			std::cout << "No of .h2b files parsed = " << DEBUG_FileParsedCount << "\n";
 			std::cout << "No of unique materials extracted = " << DEBUG_UniqueMaterialsExtracted << "\n";
-			std::cout << "No of objects in scene = " << DEBUG_MeshesParsed << "\n";
+			std::cout << "No of meshses parsed(exclusing submeshes) = " << DEBUG_MeshesParsed << "\n";
 			std::cout << "No of unique submeshes parsed = " << DEBUG_SubMeshesParsed << "\n";
-			std::cout << "No of vertices in scene = " << masterVertices.size() << "\n";
+			std::cout << "No of vertices visible in scene = " << DEBUG_VisibleVertexCount << "\n";
+			std::cout << "No of vertices uploaded to buffer = " << masterVertices.size() << "\n";
+
 
 
 		}

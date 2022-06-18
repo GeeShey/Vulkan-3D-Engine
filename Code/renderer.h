@@ -53,6 +53,7 @@ struct VERT_IN{
 	float3 nrm : NORMAL;
 	float3 sunAmbient;
 	float3 camPos;
+	uint instance_id : SV_InstanceID;
 	
 
 };
@@ -79,12 +80,11 @@ OUTPUT_TO_RASTERIZER main(VERT_IN inputVertex)
 {
 	//return float4(inputVertex.pos.x,inputVertex.pos.y-0.75f,inputVertex.pos.z +0.75f,1.0f);
 	float4 transformedData;
-
 	//inputVertex.pos.y-=0.75f;
 	//inputVertex.pos.z +=0.75f;
 	//transformedData.w = 1;
 
-	transformedData = mul(float4(inputVertex.pos,1),SceneData[0].matricies[mesh_ID]);
+	transformedData = mul(float4(inputVertex.pos,1),SceneData[0].matricies[mesh_ID + inputVertex.instance_id]);
 	transformedData = mul(transformedData,SceneData[0].viewMatrix);
 	transformedData = mul(transformedData,SceneData[0].projectionMatrix);
 
@@ -97,8 +97,8 @@ OUTPUT_TO_RASTERIZER main(VERT_IN inputVertex)
 
 	output.posH = transformedData;
 	output.uvw = inputVertex.uvw;
-	output.nrmW = mul(nrm,SceneData[0].matricies[mesh_ID]);
-	output.posW = mul(float4(inputVertex.pos,1),SceneData[0].matricies[mesh_ID]);
+	output.nrmW = mul(nrm,SceneData[0].matricies[mesh_ID  + inputVertex.instance_id]);
+	output.posW = mul(float4(inputVertex.pos,1),SceneData[0].matricies[mesh_ID  + inputVertex.instance_id]);
 	//output.sunAmbient
 	return output;
 
@@ -825,7 +825,7 @@ public:
 		{
 			for (auto submesh : iter.second.parser.meshes)
 			{
-				if (iter.second.instanceCount > 1) {
+				/*if (iter.second.instanceCount > 1) {
 
 					for (int i = 0; i < iter.second.instanceCount; i++) {
 
@@ -835,13 +835,13 @@ public:
 					}
 
 				}
-				else {
+				else {*/
 
 					int pushValues[] = { iter.second.meshId ,iter.second.materialId };
 					vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, 8, pushValues);
 					vkCmdDrawIndexed(commandBuffer, submesh.drawInfo.indexCount, iter.second.instanceCount, submesh.drawInfo.indexOffset, iter.second.vertexOffset, 0);
 
-				}
+				//}
 				
 			}
 		}
