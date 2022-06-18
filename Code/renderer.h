@@ -5,9 +5,6 @@
 #include "Level_Data.h"
 using namespace H2B;
 
-//test
-
-
 #ifdef _WIN32 // must use MT platform DLL libraries on windows
 	#pragma comment(lib, "shaderc_combined.lib") 
 #endif
@@ -414,8 +411,8 @@ public:
 	Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GVulkanSurface _vlk)
 	{
 		//init();
-
 		ld1.Parse();
+		
 		//p = ld1.p;
 		//objects = ld1.master_objects;
 
@@ -456,10 +453,12 @@ public:
 
 		for (auto& iter : ld1.LevelDataMap)
 		{
+			int j = 0;
 			for (int i = 0; i < iter.second.worldMatrices.size(); ++i)
 			{
 				smd.matricies[iter.second.meshId + i] = iter.second.worldMatrices[i];
 			}
+			j++;
 		}
 
 		smd.sunAmbient = sunAmbient;
@@ -494,54 +493,7 @@ public:
 			
 		}
 
-		//smd.materials[0] = FSLogo_materials[0].attrib;
-		//smd.materials[1] = FSLogo_materials[1].attrib;
-		//smd.materials[2] = FSLogo_materials[0].attrib;
-		//smd.materials[3] = FSLogo_materials[0].attrib;
-
-
-
-		//smd.materials[0].d = ld1.master_materials[0].attrib.d;
-		//smd.materials[0].illum = ld1.master_materials[0].attrib.illum;
-
-		//smd.materials[0].Ka.x = ld1.master_materials[0].attrib.Ka.x;
-		//smd.materials[0].Ka.y = ld1.master_materials[0].attrib.Ka.y;
-		//smd.materials[0].Ka.z = ld1.master_materials[0].attrib.Ka.z;
-
-		//smd.materials[0].Kd.x = ld1.master_materials[0].attrib.Kd.x;
-		//smd.materials[0].Kd.y = ld1.master_materials[0].attrib.Kd.y;
-		//smd.materials[0].Kd.z = ld1.master_materials[0].attrib.Kd.z;
-
-		//smd.materials[0].Ke.x = ld1.master_materials[0].attrib.Ke.x;
-		//smd.materials[0].Ke.y = ld1.master_materials[0].attrib.Ke.y;
-		//smd.materials[0].Ke.z = ld1.master_materials[0].attrib.Ke.z;
-
-		//smd.materials[0].Ks.x = ld1.master_materials[0].attrib.Ks.x;
-		//smd.materials[0].Ks.y = ld1.master_materials[0].attrib.Ks.y;
-		//smd.materials[0].Ks.z = ld1.master_materials[0].attrib.Ks.z;
-
-
-		//smd.materials[0].Ni= ld1.master_materials[0].attrib.Ni;
-		//smd.materials[0].Ns= ld1.master_materials[0].attrib.Ns;
-		//smd.materials[0].sharpness = ld1.master_materials[0].attrib.sharpness;
-
-		//smd.materials[0].Tf.x = ld1.master_materials[0].attrib.Tf.x;
-		//smd.materials[0].Tf.y = ld1.master_materials[0].attrib.Tf.y;
-		//smd.materials[0].Tf.z = ld1.master_materials[0].attrib.Tf.z;
-		////}
-
-		//smd.camGlobalPos = GW::MATH::GIdentityMatrixF;
-		/*for (int i = 0; i < MAX_SUBMESH_PER_DRAW; i++) {
-			smd.materials[i] = FSLogo_materials[i].attrib;
-		}*/
-
-
-
 		SHADER_MODEL_DATA smd_copy = smd;
-
-
-		// TODO: Part 4g
-		// TODO: part 3b
 
 		/***************** GEOMETRY INTIALIZATION ******************/
 		// Grab the device & physical device so we can allocate some stuff
