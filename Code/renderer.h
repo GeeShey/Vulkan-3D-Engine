@@ -411,7 +411,7 @@ public:
 	Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GVulkanSurface _vlk)
 	{
 		//init();
-		ld1.Parse();
+		ld1.Parse("../../Assets/Levels/L1/");
 		
 		//p = ld1.p;
 		//objects = ld1.master_objects;
@@ -503,16 +503,6 @@ public:
 		vlk.GetPhysicalDevice((void**)&physicalDevice);
 
 		_vlk.GetAspectRatio(AspectRatio);
-
-
-		
-		// TODO: Part 1c
-		// Create Vertex Buffer
-		float verts[] = {
-			   0,   0.5f,
-			 0.5f, -0.5f,
-			-0.5f, -0.5f
-		};
 		// Transfer triangle data to the vertex buffer. (staging would be prefered here)
 		GvkHelper::create_buffer(physicalDevice, device, ld1.masterVertices.size() *3* sizeof(float) * 3,//VECTOR = 3 (FLOATS ) * 3 (POS , UVW, NRM) 
 			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | 
@@ -825,24 +815,11 @@ public:
 		{
 			for (auto submesh : iter.second.parser.meshes)
 			{
-				/*if (iter.second.instanceCount > 1) {
 
-					for (int i = 0; i < iter.second.instanceCount; i++) {
+				int pushValues[] = { iter.second.meshId ,iter.second.materialId };
+				vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, 8, pushValues);
+				vkCmdDrawIndexed(commandBuffer, submesh.drawInfo.indexCount, iter.second.instanceCount, submesh.drawInfo.indexOffset, iter.second.vertexOffset, 0);
 
-						int pushValues[] = { iter.second.meshId + i  ,iter.second.materialId };
- 						vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT|VK_SHADER_STAGE_FRAGMENT_BIT, 0, 8, pushValues);
-						vkCmdDrawIndexed(commandBuffer, submesh.drawInfo.indexCount, iter.second.instanceCount, submesh.drawInfo.indexOffset, iter.second.vertexOffset,  0);
-					}
-
-				}
-				else {*/
-
-					int pushValues[] = { iter.second.meshId ,iter.second.materialId };
-					vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, 8, pushValues);
-					vkCmdDrawIndexed(commandBuffer, submesh.drawInfo.indexCount, iter.second.instanceCount, submesh.drawInfo.indexOffset, iter.second.vertexOffset, 0);
-
-				//}
-				
 			}
 		}
 		

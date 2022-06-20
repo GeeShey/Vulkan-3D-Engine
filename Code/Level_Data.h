@@ -18,6 +18,8 @@ public:
 	int DEBUG_MeshesParsed = 0;
 	int DEBUG_SubMeshesParsed = 0;
 	int DEBUG_VisibleVertexCount = 0;
+	int DEBUG_InstancedMeshes = 0;
+
 
 
 
@@ -30,6 +32,7 @@ public:
 		unsigned int vertexOffset = 0;
 		unsigned int materialId = 0;
 		int meshId = 0;
+		std::string filepath ="";
 	};
 
 	std::vector<std::string> objectNames;
@@ -43,11 +46,11 @@ public:
 	std::map<std::string, LEVEL_MODEL_DATA> LevelDataMap;
 	std::map<std::string, unsigned int> LevelDataMaterials;
 
-	std::string GameLevel_filepath = "../../Assets/Levels/";
+	std::string GameLevel_filepath = "";
 	Parser p;
 
-	int Parse() {
-
+	int Parse(std:: string _filepath) {
+		GameLevel_filepath = _filepath;
 		int VertOffset = 0;
 		int IdxOffset = 0;
 
@@ -65,9 +68,10 @@ public:
 				if (std::strcmp(line.c_str(), "MESH") == 0) {
 
 					std::getline(ifs, line);
-					std::string objName = GameLevel_filepath;
-					objName = objName.append(line);
-					objName = objName.append(".h2b");
+					std::string objName = line;
+					std::string objFilePath = GameLevel_filepath;
+					objFilePath = objFilePath.append(line);
+					objFilePath = objFilePath.append(".h2b");
 
 					for (int i = 0; i < 4; i++) {
 						std::getline(ifs, line);
@@ -79,25 +83,18 @@ public:
 
 					}
 
-
-					//master_objects.push_back(tempModel);
-					//auto iter = LevelDataMaterials.find(objName);
-
-
 					LEVEL_MODEL_DATA tempData;
 					objectNames.push_back(objName);
 					tempData.instanceCount = 1;
-					bool b = tempData.parser.Parse(objName.c_str());
+					bool b = tempData.parser.Parse(objFilePath.c_str());
 					if (!b) {
-						std::cout << "Unable to find\\parse file: " << objName<<"\n";
-						std::cout << "You time-travelled and knew your future self would commit this mistake, skipping parse and moving on!\n";
+						std::cout << "\n\nUnable to find\\parse file: " << objFilePath <<"\n\n";
 						return 0;
 					}
 					else {
 						DEBUG_FileParsedCount++;
 
 					}
-
 
 					auto iter = LevelDataMap.find(objName);
 					DEBUG_MeshesParsed++;
@@ -110,6 +107,7 @@ public:
 						}
 						tempData.vertexOffset = masterVertices.size();
 						tempData.worldMatrices.push_back(temp);
+						tempData.filepath = objFilePath;
 						LevelDataMap[objName] = tempData;
 						
 						for (int i = 0; i < LevelDataMap[objName].parser.vertices.size(); i++) {
@@ -128,6 +126,7 @@ public:
 						//encountered an instance
 						LevelDataMap[objName].worldMatrices.push_back(temp);
 						++LevelDataMap[objName].instanceCount;
+						DEBUG_InstancedMeshes++ ;
 						DEBUG_VisibleVertexCount += LevelDataMap[objName].parser.vertexCount;
 						
 					}
@@ -147,14 +146,6 @@ public:
 						}
 
 					}
-
-
-					
-
-					
-
-
-
 				}
 			}
 			ifs.close();
@@ -172,12 +163,27 @@ public:
 			std::cout << "No of unique submeshes parsed = " << DEBUG_SubMeshesParsed << "\n";
 			std::cout << "No of vertices visible in scene = " << DEBUG_VisibleVertexCount << "\n";
 			std::cout << "No of vertices uploaded to buffer = " << masterVertices.size() << "\n";
+			std::cout << "No of instanced meshes = " << DEBUG_InstancedMeshes << "\n";
 
+			std::cout << "\n\n--------------------\n";
+			std::cout << "Instance Report (Original Mesh Draw calls do not count as instances)\n";
+			std::cout << "--------------------\n";
+
+			for (auto i : LevelDataMap)
+			{
+				if (i.second.instanceCount > 1) {
+					std::cout << i.first.c_str() << " is being instanced " << i.second.instanceCount -1 << " times\n";
+				}
+			}
+
+			std::cout << "--------------------\n";
+			std::cout << "Instance Report Complete\n";
+			std::cout << "--------------------\n";
 
 
 		}
 		else {
-			std::cout << "Error Locating Game Level File\n";
+			std::cout << "\n\nError Locating Game Level File\n\n";
 			return 0;
 
 		}
