@@ -41,6 +41,7 @@ struct SHADER_MODEL_DATA
 
 	matrix matricies[1024];
 	OBJ_ATTRIBUTES materials[1024];
+	int filter_id;
 };
 
 
@@ -139,6 +140,8 @@ struct SHADER_MODEL_DATA
 
 	matrix matricies[1024];
 	OBJ_ATTRIBUTES materials[1024];
+	int filter_id;
+
 };
 
 struct OUTPUT_TO_RASTERIZER{
@@ -198,7 +201,18 @@ float4 main(OUTPUT_TO_RASTERIZER inputVertex) : SV_TARGET
 	FINAL_RESULT.x = RESULT.x + INTENSITY * SceneData[0].materials[mat_ID].Ks.x ;
 	FINAL_RESULT.y = RESULT.y + INTENSITY * SceneData[0].materials[mat_ID].Ks.y ;
 	FINAL_RESULT.z = RESULT.z + INTENSITY * SceneData[0].materials[mat_ID].Ks.z ;
-    return saturate(float4(FINAL_RESULT,0)); 
+
+	if(SceneData[0].filter_id == 0){
+		return saturate(float4(FINAL_RESULT,0)); 
+	}
+	else{
+		float avg = (RESULT.x + RESULT.y + RESULT.z)/3;
+		FINAL_RESULT.x = avg;
+		FINAL_RESULT.y = avg;
+		FINAL_RESULT.z = avg;
+		return saturate(float4(FINAL_RESULT,0)); 
+
+	}
 
 	//FINAL_RESULT.x = RESULT.x + INTENSITY * SceneData[0].materials[mesh_ID].Ks.x + worldDot;
 	//FINAL_RESULT.y = RESULT.y + INTENSITY * SceneData[0].materials[mesh_ID].Ks.y + worldDot;
@@ -239,6 +253,7 @@ class Renderer
 
 		GW::MATH::GMATRIXF matricies[MAX_SUBMESH_PER_DRAW];
 		OBJ_ATTRIBUTES materials[MAX_SUBMESH_PER_DRAW];
+		unsigned int filter_id = 0;
 	};
 
 	struct Model {
