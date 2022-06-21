@@ -7,7 +7,7 @@
 #include "shaderc/shaderc.h" // needed for compiling shaders at runtime
 #include "../Assets/FSLogo.h"
 #include "Level_Data.h"
-#include "build/DialogHelper.h"
+#include "DialogHelper.h"
 using namespace H2B;
 
 #ifdef _WIN32 // must use MT platform DLL libraries on windows
