@@ -737,14 +737,19 @@ public:
 		input_vertex_info.vertexAttributeDescriptionCount = 3;
 		input_vertex_info.pVertexAttributeDescriptions = vertex_attribute_description;
 		// Viewport State (we still need to set this up even though we will overwrite the values)
-		VkViewport viewport = {
+		VkViewport viewport[2];
+		viewport[0] = {
+			0, static_cast<float>(height/2), static_cast<float>(width), static_cast<float>(height), 0, 1
+		};
+
+		viewport[1] = {
 			0, 0, static_cast<float>(width), static_cast<float>(height), 0, 1
 		};
 		VkRect2D scissor = { {0, 0}, {width, height} };
 		VkPipelineViewportStateCreateInfo viewport_create_info = {};
 		viewport_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
 		viewport_create_info.viewportCount = 1;
-		viewport_create_info.pViewports = &viewport;
+		viewport_create_info.pViewports = viewport;
 		viewport_create_info.scissorCount = 1;
 		viewport_create_info.pScissors = &scissor;
 		// Rasterizer State
@@ -949,11 +954,15 @@ public:
 		win.GetClientWidth(width);
 		win.GetClientHeight(height);
 		// setup the pipeline's dynamic settings
-		VkViewport viewport = {
+		VkViewport viewport[2];
+		viewport [0] = {
             0, 0, static_cast<float>(width), static_cast<float>(height), 0, 1
         };
+		viewport[1] = {
+			0, static_cast<float>(height/2), static_cast<float>(width), static_cast<float>(height/2), 0, 1
+		};
         VkRect2D scissor = { {0, 0}, {width, height} };
-		vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+		vkCmdSetViewport(commandBuffer, 0, 1, &viewport[0]);
 		vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 		
@@ -970,6 +979,39 @@ public:
 			GvkHelper::write_to_buffer(device, storageBufferMemory[i], &smd_copy, sizeof(smd_copy));
 		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
 			pipelineLayout, 0, 1, &descriptorSet[i], 0, nullptr);
+		}
+
+		GvkHelper::write_to_buffer(device, storageBufferMemory[currentBuffer], &smd, sizeof(SHADER_MODEL_DATA));
+		for (auto iter : ld1.LevelDataMap)
+		{
+			for (auto submesh : iter.second.parser.meshes)
+			{
+
+				int pushValues[] = { iter.second.meshId ,iter.second.materialId };
+				vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, 8, pushValues);
+				vkCmdDrawIndexed(commandBuffer, submesh.drawInfo.indexCount, iter.second.instanceCount, submesh.drawInfo.indexOffset, iter.second.vertexOffset, 0);
+
+			}
+		}
+
+		scissor = { {0, 0}, {width, height} };
+		vkCmdSetViewport(commandBuffer, 0, 1, &viewport[1]);
+		vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+
+		// now we can draw
+		//offsets[] = { 0 };
+		vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertexHandle, offsets);
+		vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+		frameCount = 0;
+		vlk.GetSwapchainImageCount(frameCount);
+		//smd.matricies[1] = world;
+		//SHADER_MODEL_DATA smd_copy = smd;
+
+		for (int i = 0; i < frameCount; i++) {
+			GvkHelper::write_to_buffer(device, storageBufferMemory[i], &smd_copy, sizeof(smd_copy));
+			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+				pipelineLayout, 0, 1, &descriptorSet[i], 0, nullptr);
 		}
 
 		GvkHelper::write_to_buffer(device, storageBufferMemory[currentBuffer], &smd, sizeof(SHADER_MODEL_DATA));
