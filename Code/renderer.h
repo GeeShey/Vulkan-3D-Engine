@@ -38,6 +38,7 @@ struct SHADER_MODEL_DATA
 {
 	float4 sunDirection, sunColor,sunAmbient,camGlobalPos;
 	matrix viewMatrix, projectionMatrix;
+	uint filter_Id;
 
 	matrix matricies[1024];
 	OBJ_ATTRIBUTES materials[1024];
@@ -78,6 +79,7 @@ struct OUTPUT_TO_RASTERIZER{
 	float3 posW : WORLD;
 	float3 sunAmbient;
 	float3 camPos;
+	uint filter_ID;
 	
 
 };
@@ -104,20 +106,13 @@ OUTPUT_TO_RASTERIZER main(VERT_IN inputVertex)
 	output.uvw = inputVertex.uvw;
 	output.nrmW = mul(nrm,SceneData[0].matricies[mesh_ID  + inputVertex.instance_id]);
 	output.posW = mul(float4(inputVertex.pos,1),SceneData[0].matricies[mesh_ID  + inputVertex.instance_id]);
-	//output.sunAmbient
+	output.filter_ID = 
 	return output;
 
-		// TODO: Part 4e
-	// TODO: Part 4b
-		// TODO: Part 4e
 }
 )";
 // Simple Pixel Shader
 const char* pixelShaderSource = R"(
-// TODO: Part 2b
-// TODO: Part 4g
-// TODO: Part 2i
-// TODO: Part 3e
 struct OBJ_ATTRIBUTES
 {
 	float3    Kd; // diffuse reflectivity
@@ -136,6 +131,7 @@ struct SHADER_MODEL_DATA
 {
 	float4 sunDirection, sunColor,sunAmbient,camGlobalPos;
 	matrix viewMatrix, projectionMatrix;
+	uint filter_ID;
 
 	matrix matricies[1024];
 	OBJ_ATTRIBUTES materials[1024];
@@ -236,6 +232,7 @@ class Renderer
 	{
 		GW::MATH::GVECTORF sunDirection, sunColor,sunAmbient, camGlobalPos;
 		GW::MATH::GMATRIXF viewMatrix, projectionMatrix;
+		unsigned int filter_ID = 0;
 
 		GW::MATH::GMATRIXF matricies[MAX_SUBMESH_PER_DRAW];
 		OBJ_ATTRIBUTES materials[MAX_SUBMESH_PER_DRAW];
@@ -582,6 +579,7 @@ public:
 		smd.sunColor = lightColor;
 		smd.viewMatrix = view;
 		smd.projectionMatrix = projection;
+		smd.filter_ID = 0;
 		//smd.matricies[0] = GW::MATH::GIdentityMatrixF;
 
 		for (int i = 0; i < MAX_SUBMESH_PER_DRAW; i++) {
