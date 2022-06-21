@@ -1,8 +1,13 @@
-// minimalistic code to draw a single triangle, this is not part of the API.
-// TODO: Part 1b
+#define GATEWARE_ENABLE_CORE // All libraries need this
+#define GATEWARE_ENABLE_SYSTEM // Graphics libs require system level libraries
+#define GATEWARE_ENABLE_GRAPHICS // Enables all Graphics Libraries
+#define GATEWARE_ENABLE_MATH
+#define GATEWARE_ENABLE_INPUT
+
 #include "shaderc/shaderc.h" // needed for compiling shaders at runtime
 #include "../Assets/FSLogo.h"
 #include "Level_Data.h"
+#include "build/DialogHelper.h"
 using namespace H2B;
 
 #ifdef _WIN32 // must use MT platform DLL libraries on windows
@@ -212,10 +217,13 @@ float4 main(OUTPUT_TO_RASTERIZER inputVertex) : SV_TARGET
 
 }
 )";
+
 // Creation, Rendering & Cleanup
 #define MAX_SUBMESH_PER_DRAW 1024
+
 class Renderer
 {
+
 
 	struct OBJ_VERT
 	{
@@ -303,18 +311,28 @@ class Renderer
 	Parser p;
 	Level_Data ld1;
 	unsigned int levelSelected = 1;
-	bool BufferUpdateNeeded = true;
+	bool BufferUpdateNeeded = false;
 	bool init = false;
 
-	float N,Num1,Num2;
+	float N,Num1,Num2, Num3, Num4, Num5, Num6, Num7, Num8, Num9;
 
 	GW::SYSTEM::GWindow win_main;
 	GW::GRAPHICS::GVulkanSurface vlk_main;
 
-
+	float f1;
 	SHADER_MODEL_DATA smd = {0};
+	std::vector<std::string> gamelevels;
 public:
+	void f1_pressed() {
+		DialogHelper dh;
+		std::string temp_gamelevels = dh.displayOpenFileDialogue();
+		size_t lastindex = temp_gamelevels.find_last_of("\\");
+		temp_gamelevels = temp_gamelevels.substr(0, lastindex);
+		temp_gamelevels = temp_gamelevels.append("\\");
+		gamelevels.push_back(temp_gamelevels);
+		int x = 2;
 
+	}
 	void updateCamera() {
 
 		std::chrono::steady_clock::time_point currCall = std::chrono::steady_clock::now();
@@ -335,8 +353,22 @@ public:
 		inputProxy.GetState(G_KEY_S, S);
 		inputProxy.GetState(G_KEY_D, D);
 		inputProxy.GetState(G_KEY_N, N);
+
 		inputProxy.GetState(G_KEY_1, Num1);
 		inputProxy.GetState(G_KEY_2, Num2);
+		inputProxy.GetState(G_KEY_3, Num3);
+		inputProxy.GetState(G_KEY_4, Num4);
+		inputProxy.GetState(G_KEY_5, Num5);
+		inputProxy.GetState(G_KEY_6, Num6);
+		inputProxy.GetState(G_KEY_7, Num7);
+		inputProxy.GetState(G_KEY_8, Num8);
+		inputProxy.GetState(G_KEY_9, Num9);
+
+		inputProxy.GetState(G_KEY_F1, f1);
+		if (f1 > 0.0f) {
+			f1_pressed();
+		}
+
 
 		controllerProxy.GetState(0, G_LX_AXIS, L3_X);
 		controllerProxy.GetState(0, G_LY_AXIS, L3_Y);
@@ -420,6 +452,9 @@ public:
 	void checkInput() {
 
 		//std::cout << "N value " << N << "\n";
+		int oldLevel = levelSelected;
+
+
 		if (Num1 > 0.0f) {
 			if (levelSelected == 1) {
 				BufferUpdateNeeded = false;
@@ -438,11 +473,83 @@ public:
 				BufferUpdateNeeded = true;
 			}
 		}
+		else if (Num3 > 0.0f) {
+			if (levelSelected == 3) {
+				BufferUpdateNeeded = false;
+			}
+			else {
+				levelSelected = 3;
+				BufferUpdateNeeded = true;
+			}
+		}
+		else if (Num4 > 0.0f) {
+			if (levelSelected == 4) {
+				BufferUpdateNeeded = false;
+			}
+			else {
+				levelSelected = 4;
+				BufferUpdateNeeded = true;
+			}
+		}
+		else if (Num5 > 0.0f) {
+			if (levelSelected == 5) {
+				BufferUpdateNeeded = false;
+			}
+			else {
+				levelSelected = 5;
+				BufferUpdateNeeded = true;
+			}
+		}
+		else if (Num6 > 0.0f) {
+			if (levelSelected == 6) {
+				BufferUpdateNeeded = false;
+			}
+			else {
+				levelSelected = 6;
+				BufferUpdateNeeded = true;
+			}
+		}
+		else if (Num7 > 0.0f) {
+			if (levelSelected == 7) {
+				BufferUpdateNeeded = false;
+			}
+			else {
+				levelSelected = 7;
+				BufferUpdateNeeded = true;
+			}
+		}
+		else if (Num8 > 0.0f) {
+			if (levelSelected == 8) {
+				BufferUpdateNeeded = false;
+			}
+			else {
+				levelSelected = 8;
+				BufferUpdateNeeded = true;
+			}
+		}
+		else if (Num9 > 0.0f) {
+			if (levelSelected == 9) {
+				BufferUpdateNeeded = false;
+			}
+			else {
+				levelSelected = 9;
+				BufferUpdateNeeded = true;
+			}
+		}
+
+		if (levelSelected > gamelevels.size()) {
+			std::cout << "\nNot enough levels stored\n";
+			levelSelected = oldLevel;
+			BufferUpdateNeeded = false;
+			return;
+		}
+
 	}
 	void initer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GVulkanSurface _vlk) {
 		//init();	
 		if (!init) {
-			ld1.Parse("../../Assets/Levels/L3/");
+			gamelevels.push_back("../../Assets/Levels/L3/");
+			ld1.Parse(gamelevels[0]);
 			
 		}
 
@@ -807,12 +914,15 @@ public:
 	Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GVulkanSurface _vlk)
 	{
 		
+		//f1_pressed();
 		win_main = _win;
 		vlk_main = _vlk;
 		initer(win_main, vlk_main);
 		init = true;
 		
 	}
+
+	
 	void Render()
 	{
 		
@@ -820,21 +930,13 @@ public:
 
 		if (BufferUpdateNeeded) {
 			
-			if (levelSelected == 1) {
-				CleanUp();
-				Level_Data temp;
-				temp.Parse("../../Assets/Levels/L1/");
-				ld1 = temp;
- 				initer(win_main,vlk_main);
-			}
-			else {
-				CleanUp();
-				Level_Data temp;
-				temp.Parse("../../Assets/Levels/L3/");
-				ld1 = temp;
-				initer(win_main, vlk_main);
-
-			}
+			CleanUp();
+			Level_Data temp;
+			temp.Parse(gamelevels[levelSelected - 1]);
+			ld1 = temp;
+ 			initer(win_main,vlk_main);
+			
+			
 			BufferUpdateNeeded = false;
 		}
 
