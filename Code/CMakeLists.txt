@@ -43,3 +43,21 @@ if(APPLE)
 	link_libraries(/usr/local/lib/libshaderc_combined.a)
 	add_executable (Assignment_2_Vulkan main.mm)
 endif(APPLE)
+
+# add support for ktx texture loading
+include_directories(${CMAKE_SOURCE_DIR}/ktx/include)
+
+if (WIN32)
+	# Find the libraries
+	find_library(KTX_LIB_D NAMES ktx PATHS ${CMAKE_SOURCE_DIR}/ktx/lib/win32/Debug)
+	find_library(KTX_READ_LIB_D NAMES ktx_read PATHS ${CMAKE_SOURCE_DIR}/ktx/lib/win32/Debug)
+	find_library(OBJUTIL_LIB_D NAMES objUtil PATHS ${CMAKE_SOURCE_DIR}/ktx/lib/win32/Debug)
+	
+	find_library(KTX_LIB_R NAMES ktx PATHS ${CMAKE_SOURCE_DIR}/ktx/lib/win32/Release)
+	find_library(KTX_READ_LIB_R NAMES ktx_read PATHS ${CMAKE_SOURCE_DIR}/ktx/lib/win32/Release)
+	find_library(OBJUTIL_LIB_R NAMES objUtil PATHS ${CMAKE_SOURCE_DIR}/ktx/lib/win32/Release)
+	
+	target_link_libraries(Assignment_2_Vulkan debug ${KTX_LIB_D} optimized ${KTX_LIB_R})
+	target_link_libraries(Assignment_2_Vulkan debug ${KTX_READ_LIB_D} optimized ${KTX_READ_LIB_R})
+	target_link_libraries(Assignment_2_Vulkan debug ${OBJUTIL_LIB_D} optimized ${OBJUTIL_LIB_R})
+endif(WIN32)

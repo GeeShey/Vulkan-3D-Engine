@@ -3,11 +3,14 @@
 #define GATEWARE_ENABLE_GRAPHICS // Enables all Graphics Libraries
 #define GATEWARE_ENABLE_MATH
 #define GATEWARE_ENABLE_INPUT
+#define KHRONOS_STATIC 
 
 #include "shaderc/shaderc.h" // needed for compiling shaders at runtime
 #include "../Assets/FSLogo.h"
 #include "Level_Data.h"
 #include "DialogHelper.h"
+#include <ktxvulkan.h>
+
 using namespace H2B;
 
 #ifdef _WIN32 // must use MT platform DLL libraries on windows
@@ -262,6 +265,8 @@ class Renderer
 		GW::MATH::GMATRIXF worldMatrix;
 
 	};
+
+
 	
 	// proxy handles
 	GW::SYSTEM::GWindow win;
@@ -336,8 +341,112 @@ class Renderer
 
 	float f1;
 	SHADER_MODEL_DATA smd = {0};
+	VkSampler textureSampler = nullptr; // can be shared, effects quality & addressing mode
+	ktxVulkanTexture texture; // one per texture
+	VkImageView textureView = nullptr; // one per texture
+
+	// note that unlike uniform buffers, we don't need one for each "in-flight" frame
+	VkDescriptorSet textureDescriptorSet = nullptr; // std::vector<> not required
 	std::vector<std::string> gamelevels;
 public:
+
+	bool LoadTextures(const char* texturePath)
+	{
+		// Gateware, access to underlying Vulkan queue and command pool & physical device
+		VkQueue graphicsQueue;
+		VkCommandPool cmdPool;
+		VkPhysicalDevice physicalDevice;
+		vlk.GetGraphicsQueue((void**)&graphicsQueue);
+		vlk.GetCommandPool((void**)&cmdPool);
+		vlk.GetPhysicalDevice((void**)&physicalDevice);
+		// libktx, temporary variables
+		ktxTexture* kTexture;
+		KTX_error_code ktxresult;
+		ktxVulkanDeviceInfo vdi;
+		// used to transfer texture CPU memory to GPU. just need one
+		ktxresult = ktxVulkanDeviceInfo_Construct(&vdi, physicalDevice, device,
+			graphicsQueue, cmdPool, nullptr);
+		if (ktxresult != KTX_error_code::KTX_SUCCESS)
+			return false;
+		// load texture into CPU memory from file
+		ktxresult = ktxTexture_CreateFromNamedFile(texturePath,
+			KTX_TEXTURE_CREATE_NO_FLAGS, &kTexture);
+		if (ktxresult != KTX_error_code::KTX_SUCCESS)
+			return false;
+		// This gets mad if you don't encode/save the .ktx file in a format Vulkan likes
+		ktxresult = ktxTexture_VkUploadEx(kTexture, &vdi, &texture,
+			VK_IMAGE_TILING_OPTIMAL,
+			VK_IMAGE_USAGE_SAMPLED_BIT,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		if (ktxresult != KTX_error_code::KTX_SUCCESS)
+			return false;
+		// after loading all textures you don't need these anymore
+		ktxTexture_Destroy(kTexture);
+		ktxVulkanDeviceInfo_Destruct(&vdi);
+
+		// create the the image view and sampler
+		VkSamplerCreateInfo samplerInfo = {};
+		// Set the struct values
+		samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+		samplerInfo.flags = 0;
+		samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER; // REPEAT IS COMMON
+		samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+		samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+		samplerInfo.magFilter = VK_FILTER_LINEAR;
+		samplerInfo.minFilter = VK_FILTER_LINEAR;
+		samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+		samplerInfo.mipLodBias = 0;
+		samplerInfo.minLod = 0;
+		samplerInfo.maxLod = texture.levelCount;
+		samplerInfo.anisotropyEnable = VK_FALSE;
+		samplerInfo.maxAnisotropy = 1.0;
+		samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+		samplerInfo.compareEnable = VK_FALSE;
+		samplerInfo.compareOp = VK_COMPARE_OP_LESS;
+		samplerInfo.unnormalizedCoordinates = VK_FALSE;
+		samplerInfo.pNext = nullptr;
+		VkResult vr = vkCreateSampler(device, &samplerInfo, nullptr, &textureSampler);
+		if (vr != VkResult::VK_SUCCESS)
+			return false;
+
+		// Create image view.
+		// Textures are not directly accessed by the shaders and are abstracted
+		// by image views containing additional information and sub resource ranges.
+		VkImageViewCreateInfo viewInfo = {};
+		// Set the non-default values.
+		viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		viewInfo.flags = 0;
+		viewInfo.components = {
+			VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G,
+			VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A
+		};
+		viewInfo.image = texture.image;
+		viewInfo.format = texture.imageFormat;
+		viewInfo.viewType = texture.viewType;
+		viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		viewInfo.subresourceRange.layerCount = texture.layerCount;
+		viewInfo.subresourceRange.levelCount = texture.levelCount;
+		viewInfo.subresourceRange.baseMipLevel = 0;
+		viewInfo.subresourceRange.baseArrayLayer = 0;
+		viewInfo.pNext = nullptr;
+		vr = vkCreateImageView(device, &viewInfo, nullptr, &textureView);//keep one for every texture 
+		if (vr != VkResult::VK_SUCCESS)
+			return false;
+
+		// update the descriptor set(s) to point to the correct views
+		VkWriteDescriptorSet write_descriptorset = {};
+		write_descriptorset.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		write_descriptorset.descriptorCount = 1;
+		write_descriptorset.dstArrayElement = 0;
+		write_descriptorset.dstBinding = 0;
+		write_descriptorset.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		write_descriptorset.dstSet = textureDescriptorSet;
+		VkDescriptorImageInfo diinfo = { textureSampler, textureView, texture.imageLayout };
+		write_descriptorset.pImageInfo = &diinfo;
+		vkUpdateDescriptorSets(device, 1, &write_descriptorset, 0, nullptr);
+
+		return true;
+	}
 	void f1_pressed() {
 		DialogHelper dh;
 		std::string temp_gamelevels = dh.displayOpenFileDialogue();
