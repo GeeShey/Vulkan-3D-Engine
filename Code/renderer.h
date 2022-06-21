@@ -302,9 +302,14 @@ class Renderer
 	
 	Parser p;
 	Level_Data ld1;
-	//Level_Data level;
+	unsigned int levelSelected = 1;
+	bool BufferUpdateNeeded = true;
+	bool init = false;
 
+	float N,Num1,Num2;
 
+	GW::SYSTEM::GWindow win_main;
+	GW::GRAPHICS::GVulkanSurface vlk_main;
 
 
 	SHADER_MODEL_DATA smd = {0};
@@ -329,6 +334,10 @@ public:
 		inputProxy.GetState(G_KEY_A, A);
 		inputProxy.GetState(G_KEY_S, S);
 		inputProxy.GetState(G_KEY_D, D);
+		inputProxy.GetState(G_KEY_N, N);
+		inputProxy.GetState(G_KEY_1, Num1);
+		inputProxy.GetState(G_KEY_2, Num2);
+
 		controllerProxy.GetState(0, G_LX_AXIS, L3_X);
 		controllerProxy.GetState(0, G_LY_AXIS, L3_Y);
 		controllerProxy.GetState(0, G_RX_AXIS, R3_X);
@@ -408,13 +417,34 @@ public:
 
 	}
 
-	Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GVulkanSurface _vlk)
-	{
-		//init();
-		ld1.Parse("../../Assets/Levels/L1/");
-		
-		//p = ld1.p;
-		//objects = ld1.master_objects;
+	void checkInput() {
+
+		//std::cout << "N value " << N << "\n";
+		if (Num1 > 0.0f) {
+			if (levelSelected == 1) {
+				BufferUpdateNeeded = false;
+			}
+			else {
+				levelSelected = 1;
+				BufferUpdateNeeded = true;
+			}
+		}
+		else if (Num2 > 0.0f) {
+			if (levelSelected == 2) {
+				BufferUpdateNeeded = false;
+			}
+			else {
+				levelSelected = 2;
+				BufferUpdateNeeded = true;
+			}
+		}
+	}
+	void initer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GVulkanSurface _vlk) {
+		//init();	
+		if (!init) {
+			ld1.Parse("../../Assets/Levels/L3/");
+			
+		}
 
 		win = _win;
 		vlk = _vlk;
@@ -431,16 +461,16 @@ public:
 		_vlk.GetAspectRatio(aspectRatio);
 		proxy.Create();
 		// TODO: Part 2a
-		
-		proxy.LookAtLHF( camGlabalPos, GW::MATH::GVECTORF{ 0.0f,0.0f,0,1 }, GW::MATH::GVECTORF{ 0,1,0 }, view);
+
+		if(!init)
+		proxy.LookAtLHF(camGlabalPos, GW::MATH::GVECTORF{ 0.0f,0.0f,0,1 }, GW::MATH::GVECTORF{ 0,1,0 }, view);
 
 		//view_copy = view;
 		proxy.ProjectionVulkanLHF(1.13, aspectRatio, 0.1f, 1000, projection);
-		
-		GW::I::GVectorInterface::NormalizeF(lightDir,lightDir);
+
+		GW::I::GVectorInterface::NormalizeF(lightDir, lightDir);
 
 
-		// TODO: Part 2b
 		smd.sunDirection = lightDir;
 		smd.sunColor = lightColor;
 		smd.viewMatrix = view;
@@ -450,14 +480,17 @@ public:
 		for (int i = 0; i < MAX_SUBMESH_PER_DRAW; i++) {
 			smd.matricies[i] = GW::MATH::GIdentityMatrixF;
 		}
+		for (int i = 0; i < MAX_SUBMESH_PER_DRAW; i++) {
+			smd.materials[i] = {0};
+		}
 
 		int j = 0;
 		for (auto& iter : ld1.LevelDataMap)
 		{
 			iter.second.meshId = j;
- 			for (int i = 0; i < iter.second.worldMatrices.size(); ++i)
+			for (int i = 0; i < iter.second.worldMatrices.size(); ++i)
 			{
- 				smd.matricies[j] = iter.second.worldMatrices[i];
+				smd.matricies[j] = iter.second.worldMatrices[i];
 				j++;
 			}
 		}
@@ -466,32 +499,32 @@ public:
 		smd.camGlobalPos = camGlabalPos;
 		//smd.materials[0] = p.materials[0].attrib;
 
-		
-		for (int i =0; i<ld1.masterMaterials.size();i++)
-		{
-			
-				smd.materials[i].d = ld1.masterMaterials[i].attrib.d;
-				smd.materials[i].illum = ld1.masterMaterials[i].attrib.illum;
-				smd.materials[i].Ka.x = ld1.masterMaterials[i].attrib.Ka.x;
-				smd.materials[i].Ka.y = ld1.masterMaterials[i].attrib.Ka.y;
-				smd.materials[i].Ka.z = ld1.masterMaterials[i].attrib.Ka.z;
-				smd.materials[i].Kd.x = ld1.masterMaterials[i].attrib.Kd.x;
-				smd.materials[i].Kd.y = ld1.masterMaterials[i].attrib.Kd.y;
-				smd.materials[i].Kd.z = ld1.masterMaterials[i].attrib.Kd.z;
-				smd.materials[i].Ke.x = ld1.masterMaterials[i].attrib.Ke.x;
-				smd.materials[i].Ke.y = ld1.masterMaterials[i].attrib.Ke.y;
-				smd.materials[i].Ke.z = ld1.masterMaterials[i].attrib.Ke.z;
-				smd.materials[i].Ks.x = ld1.masterMaterials[i].attrib.Ks.x;
-				smd.materials[i].Ks.y = ld1.masterMaterials[i].attrib.Ks.y;
-				smd.materials[i].Ks.z = ld1.masterMaterials[i].attrib.Ks.z;
-				smd.materials[i].Ni = ld1.masterMaterials[i].attrib.Ni;
-				smd.materials[i].Ns = ld1.masterMaterials[i].attrib.Ns;
-				smd.materials[i].sharpness = ld1.masterMaterials[i].attrib.sharpness;
-				smd.materials[i].Tf.x = ld1.masterMaterials[i].attrib.Tf.x;
-				smd.materials[i].Tf.y = ld1.masterMaterials[i].attrib.Tf.y;
-				smd.materials[i].Tf.z = ld1.masterMaterials[i].attrib.Tf.z;
 
-			
+		for (int i = 0; i < ld1.masterMaterials.size(); i++)
+		{
+
+			smd.materials[i].d = ld1.masterMaterials[i].attrib.d;
+			smd.materials[i].illum = ld1.masterMaterials[i].attrib.illum;
+			smd.materials[i].Ka.x = ld1.masterMaterials[i].attrib.Ka.x;
+			smd.materials[i].Ka.y = ld1.masterMaterials[i].attrib.Ka.y;
+			smd.materials[i].Ka.z = ld1.masterMaterials[i].attrib.Ka.z;
+			smd.materials[i].Kd.x = ld1.masterMaterials[i].attrib.Kd.x;
+			smd.materials[i].Kd.y = ld1.masterMaterials[i].attrib.Kd.y;
+			smd.materials[i].Kd.z = ld1.masterMaterials[i].attrib.Kd.z;
+			smd.materials[i].Ke.x = ld1.masterMaterials[i].attrib.Ke.x;
+			smd.materials[i].Ke.y = ld1.masterMaterials[i].attrib.Ke.y;
+			smd.materials[i].Ke.z = ld1.masterMaterials[i].attrib.Ke.z;
+			smd.materials[i].Ks.x = ld1.masterMaterials[i].attrib.Ks.x;
+			smd.materials[i].Ks.y = ld1.masterMaterials[i].attrib.Ks.y;
+			smd.materials[i].Ks.z = ld1.masterMaterials[i].attrib.Ks.z;
+			smd.materials[i].Ni = ld1.masterMaterials[i].attrib.Ni;
+			smd.materials[i].Ns = ld1.masterMaterials[i].attrib.Ns;
+			smd.materials[i].sharpness = ld1.masterMaterials[i].attrib.sharpness;
+			smd.materials[i].Tf.x = ld1.masterMaterials[i].attrib.Tf.x;
+			smd.materials[i].Tf.y = ld1.masterMaterials[i].attrib.Tf.y;
+			smd.materials[i].Tf.z = ld1.masterMaterials[i].attrib.Tf.z;
+
+
 		}
 
 		SHADER_MODEL_DATA smd_copy = smd;
@@ -504,12 +537,12 @@ public:
 
 		_vlk.GetAspectRatio(AspectRatio);
 		// Transfer triangle data to the vertex buffer. (staging would be prefered here)
-		GvkHelper::create_buffer(physicalDevice, device, ld1.masterVertices.size() *3* sizeof(float) * 3,//VECTOR = 3 (FLOATS ) * 3 (POS , UVW, NRM) 
-			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | 
+		GvkHelper::create_buffer(physicalDevice, device, ld1.masterVertices.size() * 3 * sizeof(float) * 3,//VECTOR = 3 (FLOATS ) * 3 (POS , UVW, NRM) 
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
 			VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &vertexHandle, &vertexData);
 		GvkHelper::write_to_buffer(device, vertexData, &(ld1.masterVertices[0]), ld1.masterVertices.size() * 3 * sizeof(float) * 3);
 
- 		GvkHelper::create_buffer(physicalDevice, device, ld1.masterIndices.size() * sizeof(int),
+		GvkHelper::create_buffer(physicalDevice, device, ld1.masterIndices.size() * sizeof(int),
 			VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
 			VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &indexBuffer, &indexData);
 		GvkHelper::write_to_buffer(device, indexData, &ld1.masterIndices[0], ld1.masterIndices.size() * sizeof(int));
@@ -578,7 +611,7 @@ public:
 		assembly_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
 		assembly_create_info.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 		assembly_create_info.primitiveRestartEnable = false;
-		
+
 		// Vertex Input State
 		VkVertexInputBindingDescription vertex_binding_description = {};
 		vertex_binding_description.binding = 0;
@@ -598,9 +631,9 @@ public:
 		input_vertex_info.pVertexAttributeDescriptions = vertex_attribute_description;
 		// Viewport State (we still need to set this up even though we will overwrite the values)
 		VkViewport viewport = {
-            0, 0, static_cast<float>(width), static_cast<float>(height), 0, 1
-        };
-        VkRect2D scissor = { {0, 0}, {width, height} };
+			0, 0, static_cast<float>(width), static_cast<float>(height), 0, 1
+		};
+		VkRect2D scissor = { {0, 0}, {width, height} };
 		VkPipelineViewportStateCreateInfo viewport_create_info = {};
 		viewport_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
 		viewport_create_info.viewportCount = 1;
@@ -660,7 +693,7 @@ public:
 		color_blend_create_info.blendConstants[2] = 0.0f;
 		color_blend_create_info.blendConstants[3] = 0.0f;
 		// Dynamic State 
-		VkDynamicState dynamic_state[2] = { 
+		VkDynamicState dynamic_state[2] = {
 			// By setting these we do not need to re-create the pipeline on Resize
 			VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR
 		};
@@ -668,8 +701,8 @@ public:
 		dynamic_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
 		dynamic_create_info.dynamicStateCount = 2;
 		dynamic_create_info.pDynamicStates = dynamic_state;
-		
-	
+
+
 		// Descriptor pipeline layout
 		VkPipelineLayoutCreateInfo pipeline_layout_create_info = {};
 		pipeline_layout_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -684,7 +717,7 @@ public:
 		vk_descriptor_set_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 		vk_descriptor_set_layout_binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 		vk_descriptor_set_layout_binding.pImmutableSamplers = nullptr;
-		vk_descriptor_set_layout_binding.binding= 0;
+		vk_descriptor_set_layout_binding.binding = 0;
 
 		VkDescriptorSetLayoutCreateInfo Vk_descriptor_set_layout_create_info;
 		Vk_descriptor_set_layout_create_info.bindingCount = 1;
@@ -743,7 +776,7 @@ public:
 		pipeline_layout_create_info.pPushConstantRanges = &push_constant_range_1;
 		vkCreatePipelineLayout(device, &pipeline_layout_create_info,
 			nullptr, &pipelineLayout);
-	    // Pipeline State... (FINALLY) 
+		// Pipeline State... (FINALLY) 
 		VkGraphicsPipelineCreateInfo pipeline_create_info = {};
 		pipeline_create_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 		pipeline_create_info.stageCount = 2;
@@ -760,7 +793,7 @@ public:
 		pipeline_create_info.renderPass = renderPass;
 		pipeline_create_info.subpass = 0;
 		pipeline_create_info.basePipelineHandle = VK_NULL_HANDLE;
-		vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, 
+		vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1,
 			&pipeline_create_info, nullptr, &pipeline);
 
 		/***************** CLEANUP / SHUTDOWN ******************/
@@ -769,15 +802,42 @@ public:
 			if (+shutdown.Find(GW::GRAPHICS::GVulkanSurface::Events::RELEASE_RESOURCES, true)) {
 				CleanUp(); // unlike D3D we must be careful about destroy timing
 			}
-		});
+			});
+	}
+	Renderer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GVulkanSurface _vlk)
+	{
+		
+		win_main = _win;
+		vlk_main = _vlk;
+		initer(win_main, vlk_main);
+		init = true;
+		
 	}
 	void Render()
 	{
-		// TODO: Part 2a
-		//proxy.RotateYGlobalF(world, 0.0174533f/10, world);
-		//worldRot+=0.0001;
-		// TODO: Part 4d
-		// grab the current Vulkan commandBuffer
+		
+		checkInput();
+
+		if (BufferUpdateNeeded) {
+			
+			if (levelSelected == 1) {
+				CleanUp();
+				Level_Data temp;
+				temp.Parse("../../Assets/Levels/L1/");
+				ld1 = temp;
+ 				initer(win_main,vlk_main);
+			}
+			else {
+				CleanUp();
+				Level_Data temp;
+				temp.Parse("../../Assets/Levels/L3/");
+				ld1 = temp;
+				initer(win_main, vlk_main);
+
+			}
+			BufferUpdateNeeded = false;
+		}
+
 		unsigned int currentBuffer;
 		vlk.GetSwapchainCurrentImage(currentBuffer);
 		VkCommandBuffer commandBuffer;
@@ -831,8 +891,7 @@ private:
 		// wait till everything has completed
 		vkDeviceWaitIdle(device);
 		// Release allocated buffers, shaders & pipeline
-		// TODO: Part 1g
-		// TODO: Part 2d
+
 		vkDestroyBuffer(device, vertexHandle, nullptr);
 		vkFreeMemory(device, vertexData, nullptr);
 		vkDestroyBuffer(device, indexBuffer, nullptr);
@@ -849,10 +908,7 @@ private:
 
 		vkDestroyShaderModule(device, vertexShader, nullptr);
 		vkDestroyShaderModule(device, pixelShader, nullptr);
-		// TODO: Part 2e
 		vkDestroyDescriptorSetLayout(device, descriptorLayout, nullptr);
-
-		// TODO: part 2f
 		vkDestroyDescriptorPool(device, descriptorPool, nullptr);
 		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 		vkDestroyPipeline(device, pipeline, nullptr);
