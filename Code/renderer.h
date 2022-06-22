@@ -9,6 +9,7 @@
 #include "../Assets/FSLogo.h"
 #include "Level_Data.h"
 #include "DialogHelper.h"
+
 #include <ktxvulkan.h>
 
 using namespace H2B;
@@ -49,7 +50,7 @@ struct SHADER_MODEL_DATA
 
 
 
-StructuredBuffer<SHADER_MODEL_DATA> SceneData;
+StructuredBuffer<SHADER_MODEL_DATA> SceneData : register(b0);
 [[vk::push_constant]]
 cbuffer MESH_INDEX{
 	uint mesh_ID;
@@ -118,10 +119,10 @@ OUTPUT_TO_RASTERIZER main(VERT_IN inputVertex)
 )";
 // Simple Pixel Shader
 const char* pixelShaderSource = R"(
-// TODO: Part 2b
-// TODO: Part 4g
-// TODO: Part 2i
-// TODO: Part 3e
+//[[vk::binding(1, 1)]]
+Texture2D diffuseMap[] : register(t1);
+//[[vk::binding(1, 1)]]
+SamplerState qualityFilter : register(s1);
 struct OBJ_ATTRIBUTES
 {
 	float3    Kd; // diffuse reflectivity
@@ -155,7 +156,7 @@ struct OUTPUT_TO_RASTERIZER{
 
 };
 
-StructuredBuffer<SHADER_MODEL_DATA> SceneData;
+StructuredBuffer<SHADER_MODEL_DATA> SceneData : register(b0);
 [[vk::push_constant]]
 cbuffer MESH_INDEX{
 	uint mesh_ID;
@@ -166,6 +167,7 @@ cbuffer MESH_INDEX{
 
 float4 main(OUTPUT_TO_RASTERIZER inputVertex) : SV_TARGET 
 {	
+return diffuseMap[1].Sample(qualityFilter,inputVertex.uvw.xy);
 	//return float4(0.25f ,0.25f, 0.75f, 0); // TODO: Part 1a
 
 	float4 finalColor;
@@ -266,37 +268,19 @@ class Renderer
 
 	};
 
-
-	
 	// proxy handles
 	GW::SYSTEM::GWindow win;
 	GW::GRAPHICS::GVulkanSurface vlk;
 	GW::CORE::GEventReceiver shutdown;
 	
 	// what we need at a minimum to draw a triangle
-	VkDevice device = nullptr;
-	VkBuffer vertexHandle = nullptr;
-	VkDeviceMemory vertexData = nullptr;
-	// TODO: Part 1g
-	VkBuffer indexBuffer = nullptr;
-	VkDeviceMemory indexData = nullptr;
-	// TODO: Part 2c
-	VkShaderModule vertexShader = nullptr;
-	VkShaderModule pixelShader = nullptr;
-
-	//VkDeviceMemory storageData = nullptr;
-	std::vector<VkBuffer> storageBufferVector;
-	std::vector<VkDeviceMemory> storageBufferMemory;
-
+ // not-plural since we need multiple for one resource
 
 	// pipeline settings for drawing (also required)
 	VkPipeline pipeline = nullptr;
 	VkPipelineLayout pipelineLayout = nullptr;
 	// TODO: Part 2e
-	VkDescriptorSetLayout descriptorLayout = nullptr; // describes order of connection to shaders
-	VkDescriptorPool descriptorPool = nullptr; // used to allocate descriptorSets (required)
-
-	std::vector<VkDescriptorSet> descriptorSet; // not-plural since we need multiple for one resource
+	VkDescriptorSetLayout vertexDescriptorLayout = nullptr; // describes order of connection to shaders
 
 	GW::MATH::GMatrix proxy;
 	GW::MATH::GMATRIXF world = GW::MATH::GIdentityMatrixF;
@@ -339,18 +323,42 @@ class Renderer
 	GW::SYSTEM::GWindow win_main;
 	GW::GRAPHICS::GVulkanSurface vlk_main;
 
+	std::vector<std::string> gamelevels;
 	float f1;
 	SHADER_MODEL_DATA smd = {0};
+	std::vector < std::string> textureFiles;
+
+	/***************** KTX+VULKAN TEXTURING VARIABLES ******************/
+
+// what we need at minimum to load/apply one texture
+	//ktxVulkanTexture texture; // one per texture
+	//VkImageView textureView = nullptr; // one per texture
 	VkSampler textureSampler = nullptr; // can be shared, effects quality & addressing mode
-	ktxVulkanTexture texture; // one per texture
-	VkImageView textureView = nullptr; // one per texture
-
 	// note that unlike uniform buffers, we don't need one for each "in-flight" frame
-	VkDescriptorSet textureDescriptorSet = nullptr; // std::vector<> not required
-	std::vector<std::string> gamelevels;
-public:
 
-	bool LoadTextures(const char* texturePath)
+	// be aware that all pipeline shaders share the same bind points
+	VkDescriptorSetLayout pixelDescriptorLayout = nullptr;
+	// textures can optionally share descriptor sets/pools/layouts with uniform & storage buffers	
+	VkDescriptorPool descriptorPool = nullptr;
+	VkDevice device = nullptr;
+	VkBuffer vertexHandle = nullptr;
+	VkDeviceMemory vertexData = nullptr;
+	// TODO: Part 1g
+	VkBuffer indexBuffer = nullptr;
+	VkDeviceMemory indexData = nullptr;
+	// TODO: Part 2c
+	VkShaderModule vertexShader = nullptr;
+	VkShaderModule pixelShader = nullptr;
+
+	std::vector<VkBuffer> matrixBuffer;
+	std::vector<VkDeviceMemory> storageBufferMemory;
+	std::vector<VkDescriptorSet> matrixDescriptorSet;
+	std::vector < ktxVulkanTexture> tex;
+	std::vector < VkImageView> tex_view;
+
+	// pipeline settings for drawing (also required)
+public:
+	bool LoadTexture(std::string texturePath, ktxVulkanTexture& texture, VkImageView& textureView)
 	{
 		// Gateware, access to underlying Vulkan queue and command pool & physical device
 		VkQueue graphicsQueue;
@@ -369,7 +377,7 @@ public:
 		if (ktxresult != KTX_error_code::KTX_SUCCESS)
 			return false;
 		// load texture into CPU memory from file
-		ktxresult = ktxTexture_CreateFromNamedFile(texturePath,
+		ktxresult = ktxTexture_CreateFromNamedFile(texturePath.c_str(),
 			KTX_TEXTURE_CREATE_NO_FLAGS, &kTexture);
 		if (ktxresult != KTX_error_code::KTX_SUCCESS)
 			return false;
@@ -383,31 +391,6 @@ public:
 		// after loading all textures you don't need these anymore
 		ktxTexture_Destroy(kTexture);
 		ktxVulkanDeviceInfo_Destruct(&vdi);
-
-		// create the the image view and sampler
-		VkSamplerCreateInfo samplerInfo = {};
-		// Set the struct values
-		samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-		samplerInfo.flags = 0;
-		samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER; // REPEAT IS COMMON
-		samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-		samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-		samplerInfo.magFilter = VK_FILTER_LINEAR;
-		samplerInfo.minFilter = VK_FILTER_LINEAR;
-		samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-		samplerInfo.mipLodBias = 0;
-		samplerInfo.minLod = 0;
-		samplerInfo.maxLod = texture.levelCount;
-		samplerInfo.anisotropyEnable = VK_FALSE;
-		samplerInfo.maxAnisotropy = 1.0;
-		samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
-		samplerInfo.compareEnable = VK_FALSE;
-		samplerInfo.compareOp = VK_COMPARE_OP_LESS;
-		samplerInfo.unnormalizedCoordinates = VK_FALSE;
-		samplerInfo.pNext = nullptr;
-		VkResult vr = vkCreateSampler(device, &samplerInfo, nullptr, &textureSampler);
-		if (vr != VkResult::VK_SUCCESS)
-			return false;
 
 		// Create image view.
 		// Textures are not directly accessed by the shaders and are abstracted
@@ -429,21 +412,11 @@ public:
 		viewInfo.subresourceRange.baseMipLevel = 0;
 		viewInfo.subresourceRange.baseArrayLayer = 0;
 		viewInfo.pNext = nullptr;
-		vr = vkCreateImageView(device, &viewInfo, nullptr, &textureView);//keep one for every texture 
+		VkResult vr = vkCreateImageView(device, &viewInfo, nullptr, &textureView);
+
+
 		if (vr != VkResult::VK_SUCCESS)
 			return false;
-
-		// update the descriptor set(s) to point to the correct views
-		VkWriteDescriptorSet write_descriptorset = {};
-		write_descriptorset.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		write_descriptorset.descriptorCount = 1;
-		write_descriptorset.dstArrayElement = 0;
-		write_descriptorset.dstBinding = 0;
-		write_descriptorset.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		write_descriptorset.dstSet = textureDescriptorSet;
-		VkDescriptorImageInfo diinfo = { textureSampler, textureView, texture.imageLayout };
-		write_descriptorset.pImageInfo = &diinfo;
-		vkUpdateDescriptorSets(device, 1, &write_descriptorset, 0, nullptr);
 
 		return true;
 	}
@@ -780,14 +753,14 @@ public:
 
 		unsigned int frameCount = 0;
 		vlk.GetSwapchainImageCount(frameCount);
-		storageBufferVector.resize(frameCount);
+		matrixBuffer.resize(frameCount);
 		storageBufferMemory.resize(frameCount);
 
 
 		for (int i = 0; i < frameCount; i++) {
 			GvkHelper::create_buffer(physicalDevice, device, sizeof(smd_copy),
 				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-				VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &storageBufferVector[i], &storageBufferMemory[i]);
+				VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &matrixBuffer[i], &storageBufferMemory[i]);
 			GvkHelper::write_to_buffer(device, storageBufferMemory[i], &smd_copy, sizeof(smd_copy));
 		}
 
@@ -942,37 +915,41 @@ public:
 		// Descriptor pipeline layout
 		VkPipelineLayoutCreateInfo pipeline_layout_create_info = {};
 		pipeline_layout_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		// TODO: Part 2e
 		pipeline_layout_create_info.setLayoutCount = 1;
+		VkDescriptorSetLayoutBinding vk_descriptor_set_layout_binding[2];
+		vk_descriptor_set_layout_binding[0].descriptorCount = 1;
+		vk_descriptor_set_layout_binding[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		vk_descriptor_set_layout_binding[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+		vk_descriptor_set_layout_binding[0].pImmutableSamplers = nullptr;
+		vk_descriptor_set_layout_binding[0].binding = 0;
 
-
-
-
-		VkDescriptorSetLayoutBinding vk_descriptor_set_layout_binding;
-		vk_descriptor_set_layout_binding.descriptorCount = 1;
-		vk_descriptor_set_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-		vk_descriptor_set_layout_binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-		vk_descriptor_set_layout_binding.pImmutableSamplers = nullptr;
-		vk_descriptor_set_layout_binding.binding = 0;
+		vk_descriptor_set_layout_binding[1].descriptorCount = 500;
+		vk_descriptor_set_layout_binding[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		vk_descriptor_set_layout_binding[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+		vk_descriptor_set_layout_binding[1].pImmutableSamplers = nullptr;
+		vk_descriptor_set_layout_binding[1].binding = 1;
 
 		VkDescriptorSetLayoutCreateInfo Vk_descriptor_set_layout_create_info;
-		Vk_descriptor_set_layout_create_info.bindingCount = 1;
-		Vk_descriptor_set_layout_create_info.pBindings = &vk_descriptor_set_layout_binding;
+		Vk_descriptor_set_layout_create_info.bindingCount = ARRAYSIZE(vk_descriptor_set_layout_binding);
+		Vk_descriptor_set_layout_create_info.pBindings = vk_descriptor_set_layout_binding;
 		Vk_descriptor_set_layout_create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 		Vk_descriptor_set_layout_create_info.pNext = nullptr;
 		Vk_descriptor_set_layout_create_info.flags = 0;
 
 		VkResult r = vkCreateDescriptorSetLayout(device, &Vk_descriptor_set_layout_create_info,
-			nullptr, &descriptorLayout);
+			nullptr, &vertexDescriptorLayout);
 
-		pipeline_layout_create_info.pSetLayouts = &descriptorLayout;
+		pipeline_layout_create_info.pSetLayouts = &vertexDescriptorLayout;
+		
 
 		VkDescriptorPoolCreateInfo descriptorpool_create_info = {};
-		VkDescriptorPoolSize descriptorpool_size = { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, frameCount };
+		VkDescriptorPoolSize descriptorpool_size[] = {
+			{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, frameCount},
+			{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 500 * frameCount} };
 		descriptorpool_create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-		descriptorpool_create_info.poolSizeCount = 1;
-		descriptorpool_create_info.pPoolSizes = &descriptorpool_size;
-		descriptorpool_create_info.maxSets = frameCount;
+		descriptorpool_create_info.poolSizeCount = ARRAYSIZE(descriptorpool_size);
+		descriptorpool_create_info.pPoolSizes = descriptorpool_size;
+		descriptorpool_create_info.maxSets = 1002;
 		descriptorpool_create_info.flags = 0;
 		descriptorpool_create_info.pNext = nullptr;
 		vkCreateDescriptorPool(device, &descriptorpool_create_info, nullptr, &descriptorPool);
@@ -980,28 +957,91 @@ public:
 		VkDescriptorSetAllocateInfo descriptorset_allocate_info = {};
 		descriptorset_allocate_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 		descriptorset_allocate_info.descriptorSetCount = 1;
-		descriptorset_allocate_info.pSetLayouts = &descriptorLayout;
+		descriptorset_allocate_info.pSetLayouts = &vertexDescriptorLayout;
 		descriptorset_allocate_info.descriptorPool = descriptorPool;
 		descriptorset_allocate_info.pNext = nullptr;
-		descriptorSet.resize(frameCount);
-		for (int i = 0; i < frameCount; ++i) {
-			vkAllocateDescriptorSets(device, &descriptorset_allocate_info, &descriptorSet[i]);
-		}
+		matrixDescriptorSet.resize(frameCount);
 
-		VkWriteDescriptorSet write_descriptorset = {};
-		write_descriptorset.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		write_descriptorset.descriptorCount = 1;
-		write_descriptorset.dstArrayElement = 0;
-		write_descriptorset.dstBinding = 0;
-		write_descriptorset.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		VkSamplerCreateInfo samplerInfo = {};
+		// Set the struct values
+		samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+		samplerInfo.flags = 0;
+		samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER; // REPEAT IS COMMON
+		samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+		samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+		samplerInfo.magFilter = VK_FILTER_LINEAR;
+		samplerInfo.minFilter = VK_FILTER_LINEAR;
+		samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+		samplerInfo.mipLodBias = 0;
+		samplerInfo.minLod = 0;
+		samplerInfo.maxLod = 1;
+		samplerInfo.anisotropyEnable = VK_FALSE;
+		samplerInfo.maxAnisotropy = 1.0;
+		samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+		samplerInfo.compareEnable = VK_FALSE;
+		samplerInfo.compareOp = VK_COMPARE_OP_LESS;
+		samplerInfo.unnormalizedCoordinates = VK_FALSE;
+		samplerInfo.pNext = nullptr;
+		VkResult vr = vkCreateSampler(device, &samplerInfo, nullptr, &textureSampler);
+
+		//ktxVulkanTexture tex[500];
+		//VkImageView tex_view[500];
+
 		for (int i = 0; i < frameCount; ++i) {
-			write_descriptorset.dstSet = descriptorSet[i];
-			VkDescriptorBufferInfo dbinfo = { storageBufferVector[i], 0, VK_WHOLE_SIZE };
+			vkAllocateDescriptorSets(device, &descriptorset_allocate_info, &matrixDescriptorSet[i]);
+			VkWriteDescriptorSet write_descriptorset = {};
+			write_descriptorset.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			write_descriptorset.descriptorCount = 1;
+			write_descriptorset.dstArrayElement = 0;
+			write_descriptorset.dstBinding = 0;
+			write_descriptorset.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+			write_descriptorset.dstSet = matrixDescriptorSet[i];
+			VkDescriptorBufferInfo dbinfo = { matrixBuffer[i], 0, VK_WHOLE_SIZE };
 			write_descriptorset.pBufferInfo = &dbinfo;
 			vkUpdateDescriptorSets(device, 1, &write_descriptorset, 0, nullptr);
+
+			VkWriteDescriptorSet write_descriptorset_tex[500] = {};
+			textureFiles.push_back("../../Assets/Levels/L1/1.ktx");
+			textureFiles.push_back("../../Assets/Levels/L1/default2dtexture.ktx");
+
+			for (size_t j = 0; j < 500; j++)
+			{
+				VkDescriptorImageInfo vdii = {};
+				ktxVulkanTexture tempTex;
+				VkImageView tempView;
+
+				if (j < textureFiles.size()) {
+
+					LoadTexture(textureFiles[j].c_str(), tempTex, tempView);
+
+				}
+				else {
+					LoadTexture(textureFiles[0].c_str(), tempTex, tempView);
+				}
+				
+				tex.push_back(tempTex);
+				tex_view.push_back(tempView);
+
+				vdii.imageLayout = tempTex.imageLayout;
+				vdii.imageView = tempView;
+				vdii.sampler = textureSampler;
+				//write_descriptorset.dstSet = matrixDescriptorSet[i];
+				write_descriptorset_tex[j].pBufferInfo = nullptr;
+				write_descriptorset_tex[j].pImageInfo = &vdii;
+				write_descriptorset_tex[j].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				write_descriptorset_tex[j].descriptorCount = 1;
+				write_descriptorset_tex[j].dstArrayElement = j;
+				write_descriptorset_tex[j].dstBinding = 1;
+				write_descriptorset_tex[j].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				write_descriptorset_tex[j].dstSet = matrixDescriptorSet[i];
+
+			}
+			vkUpdateDescriptorSets(device, 500, write_descriptorset_tex, 0, nullptr);
+		
 		}
 
-		// TODO: Part 3c
+
+
 		pipeline_layout_create_info.pushConstantRangeCount = 1;
 		VkPushConstantRange push_constant_range_1;
 		push_constant_range_1.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
@@ -1031,6 +1071,11 @@ public:
 		pipeline_create_info.basePipelineHandle = VK_NULL_HANDLE;
 		vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1,
 			&pipeline_create_info, nullptr, &pipeline);
+
+		/***************** TEXTURE DESCRIPTOR FOR FRAGMENT/PIXEL SHADER ******************/
+
+		
+		
 
 		/***************** CLEANUP / SHUTDOWN ******************/
 		// GVulkanSurface will inform us when to release any allocated resources
@@ -1099,13 +1144,19 @@ public:
 		//smd.matricies[1] = world;
 		SHADER_MODEL_DATA smd_copy = smd;
 		
-		for (int i = 0; i < frameCount; i++) {
-			GvkHelper::write_to_buffer(device, storageBufferMemory[i], &smd_copy, sizeof(smd_copy));
+		//for (int i = 0; i < frameCount; i++) {
+			GvkHelper::write_to_buffer(device, storageBufferMemory[currentBuffer], &smd_copy, sizeof(smd_copy));
 		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-			pipelineLayout, 0, 1, &descriptorSet[i], 0, nullptr);
-		}
+			pipelineLayout, 0, 1, &matrixDescriptorSet[currentBuffer], 0, nullptr);
+		//}
 
-		GvkHelper::write_to_buffer(device, storageBufferMemory[currentBuffer], &smd, sizeof(SHADER_MODEL_DATA));
+		/***************** BINDING OF TEXTURE DESCRIPTOR SET TO PIXEL SHADER ******************/
+
+		//// *NEW* Set the matrixDescriptorSet that contains our texture
+		//vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+		//	pipelineLayout, 0, 1, &descriptorSet_tex, 0, nullptr);
+
+		//GvkHelper::write_to_buffer(device, storageBufferMemory[currentBuffer], &smd, sizeof(SHADER_MODEL_DATA));
 		for (auto iter : ld1.LevelDataMap)
 		{
 			for (auto submesh : iter.second.parser.meshes)
@@ -1132,13 +1183,16 @@ public:
 		//smd.matricies[1] = world;
 		//SHADER_MODEL_DATA smd_copy = smd;
 
-		for (int i = 0; i < frameCount; i++) {
-			GvkHelper::write_to_buffer(device, storageBufferMemory[i], &smd_copy, sizeof(smd_copy));
-			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-				pipelineLayout, 0, 1, &descriptorSet[i], 0, nullptr);
-		}
+		//for (int i = 0; i < frameCount; i++) {
+		//	GvkHelper::write_to_buffer(device, storageBufferMemory[i], &smd_copy, sizeof(smd_copy));
+		//	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+		//		pipelineLayout, 0, 1, &matrixDescriptorSet[i], 0, nullptr);
+		//}
 
-		GvkHelper::write_to_buffer(device, storageBufferMemory[currentBuffer], &smd, sizeof(SHADER_MODEL_DATA));
+		//vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+		//	pipelineLayout, 0, 1, &descriptorSet_tex, 0, nullptr);
+
+		//GvkHelper::write_to_buffer(device, storageBufferMemory[currentBuffer], &smd, sizeof(SHADER_MODEL_DATA));
 		for (auto iter : ld1.LevelDataMap)
 		{
 			for (auto submesh : iter.second.parser.meshes)
@@ -1156,6 +1210,30 @@ public:
 private:
 	void CleanUp()
 	{
+		/*
+
+
+	std::vector<VkDescriptorSet> matrixDescriptorSet;
+		
+		
+		
+		*/
+
+		vkDeviceWaitIdle(device);
+		// When done using the image in Vulkan...
+		//ktxVulkanTexture_Destruct(&texture, device, nullptr);
+		//if (textureView) {
+		//	vkDestroyImageView(device, textureView, nullptr);
+		//	textureView = nullptr;
+		//}
+		if (textureSampler) {
+			vkDestroySampler(device, textureSampler, nullptr);
+			textureSampler = nullptr;
+		}
+		// don't need the descriptors anymore
+		vkDestroyDescriptorSetLayout(device, vertexDescriptorLayout, nullptr);
+		vkDestroyDescriptorSetLayout(device, pixelDescriptorLayout, nullptr);
+
 		// wait till everything has completed
 		vkDeviceWaitIdle(device);
 		// Release allocated buffers, shaders & pipeline
@@ -1164,19 +1242,22 @@ private:
 		vkFreeMemory(device, vertexData, nullptr);
 		vkDestroyBuffer(device, indexBuffer, nullptr);
 		vkFreeMemory(device, indexData, nullptr);
-
-
-
-		for (int i = 0; i < storageBufferVector.size(); i++) {
-			vkDestroyBuffer(device, storageBufferVector[i], nullptr);
-			vkFreeMemory(device, storageBufferMemory[i], nullptr);
-
+		for (int i = 0; i < tex.size(); i++) {
+			ktxVulkanTexture_Destruct(&tex[i],device,nullptr);
+			if (tex_view[i]) {
+				vkDestroyImageView(device, tex_view[i], nullptr);
+			}
 		}
 
 
+		for (int i = 0; i < matrixBuffer.size(); i++) {
+			vkDestroyBuffer(device, matrixBuffer[i], nullptr);
+			vkFreeMemory(device, storageBufferMemory[i], nullptr);
+
+		}
 		vkDestroyShaderModule(device, vertexShader, nullptr);
 		vkDestroyShaderModule(device, pixelShader, nullptr);
-		vkDestroyDescriptorSetLayout(device, descriptorLayout, nullptr);
+		vkDestroyDescriptorSetLayout(device, vertexDescriptorLayout, nullptr);
 		vkDestroyDescriptorPool(device, descriptorPool, nullptr);
 		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 		vkDestroyPipeline(device, pipeline, nullptr);
