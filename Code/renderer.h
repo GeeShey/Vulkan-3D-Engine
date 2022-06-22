@@ -120,7 +120,7 @@ OUTPUT_TO_RASTERIZER main(VERT_IN inputVertex)
 // Simple Pixel Shader
 const char* pixelShaderSource = R"(
 //[[vk::binding(1, 1)]]
-Texture2D diffuseMap[] : register(t1);
+Texture2D Map[] : register(t1);
 //[[vk::binding(1, 1)]]
 SamplerState qualityFilter : register(s1);
 struct OBJ_ATTRIBUTES
@@ -167,9 +167,11 @@ cbuffer MESH_INDEX{
 
 float4 main(OUTPUT_TO_RASTERIZER inputVertex) : SV_TARGET 
 {	
-return diffuseMap[1].Sample(qualityFilter,inputVertex.uvw.xy);
-	//return float4(0.25f ,0.25f, 0.75f, 0); // TODO: Part 1a
-
+	float4 diff = Map[0].Sample(qualityFilter,inputVertex.uvw.xy);
+	float4 nrm  = Map[2].Sample(qualityFilter,inputVertex.uvw.xy);
+	float4 spec = Map[1].Sample(qualityFilter,inputVertex.uvw.xy);
+	
+	//return nrm;
 	float4 finalColor;
 
 	//inputVertex.nrmW = normalize(inputVertex.nrmW);
@@ -179,45 +181,32 @@ return diffuseMap[1].Sample(qualityFilter,inputVertex.uvw.xy);
 	
 	float3 SUNSURFACECOLOR,INDIRECT,DIRECT;
 
-	INDIRECT.x = SceneData[0].sunAmbient.x * SceneData[0].materials[mat_ID].Ka.x * SceneData[0].materials[mat_ID].Kd.x ;
-	INDIRECT.y = SceneData[0].sunAmbient.y * SceneData[0].materials[mat_ID].Ka.y * SceneData[0].materials[mat_ID].Kd.y ;
-	INDIRECT.z = SceneData[0].sunAmbient.z * SceneData[0].materials[mat_ID].Ka.z * SceneData[0].materials[mat_ID].Kd.z ;
+	INDIRECT.y = SceneData[0].sunAmbient.y * diff.x;
+	INDIRECT.z = SceneData[0].sunAmbient.z * diff.y;
+	INDIRECT.x = SceneData[0].sunAmbient.x * diff.z;
 
 	DIRECT.x = LIGHTRATIO * SceneData[0].sunColor.x;
 	DIRECT.y = LIGHTRATIO * SceneData[0].sunColor.y;
 	DIRECT.z = LIGHTRATIO * SceneData[0].sunColor.z;
 
-	float3 RESULT;
-	RESULT.x = saturate((DIRECT + INDIRECT) * SceneData[0].materials[mat_ID].Kd.x);
-	RESULT.y = saturate((DIRECT + INDIRECT) * SceneData[0].materials[mat_ID].Kd.y);
-	RESULT.z = saturate((DIRECT + INDIRECT) * SceneData[0].materials[mat_ID].Kd.z);
-
-	//return float4(RESULT, 0);
+	float3 RESULT = saturate((DIRECT + INDIRECT) * diff.xyz);
 
 
+	//return float4(RESULT, diff.a);
+
+	float3 FINAL_RESULT;
 	float3 VIEWDIR = normalize(SceneData[0].camGlobalPos.xyz - inputVertex.posw);
 	float3 HALFVECTOR = normalize(-normalize(SceneData[0].sunDirection.xyz) + VIEWDIR);
 	float INTENSITY = saturate(pow(dot(HALFVECTOR,normalize(inputVertex.nrmW)),SceneData[0].materials[mat_ID].Ns));
+
+	FINAL_RESULT = RESULT + INTENSITY * spec.x ;
+	return saturate(float4(FINAL_RESULT,0)); 
+
+	//float4 normal = normalize( normalTex.rgb * 2.0 - 1.0 );
+
 	
-	float3 FINAL_RESULT;
 	float worldDot = 0;
 	worldDot = 1 - saturate(dot(normalize(inputVertex.nrmW),VIEWDIR));
-
-	FINAL_RESULT.x = RESULT.x + INTENSITY * SceneData[0].materials[mat_ID].Ks.x ;
-	FINAL_RESULT.y = RESULT.y + INTENSITY * SceneData[0].materials[mat_ID].Ks.y ;
-	FINAL_RESULT.z = RESULT.z + INTENSITY * SceneData[0].materials[mat_ID].Ks.z ;
-
-	if(SceneData[0].filter_id == 0){
-		return saturate(float4(FINAL_RESULT,0)); 
-	}
-	else{
-		float avg = (RESULT.x + RESULT.y + RESULT.z)/3;
-		FINAL_RESULT.x = avg;
-		FINAL_RESULT.y = avg;
-		FINAL_RESULT.z = avg;
-		return saturate(float4(FINAL_RESULT,0)); 
-
-	}
 
 	//FINAL_RESULT.x = RESULT.x + INTENSITY * SceneData[0].materials[mesh_ID].Ks.x + worldDot;
 	//FINAL_RESULT.y = RESULT.y + INTENSITY * SceneData[0].materials[mesh_ID].Ks.y + worldDot;
@@ -288,7 +277,9 @@ class Renderer
 	GW::MATH::GMATRIXF projection = GW::MATH::GIdentityMatrixF;
 	GW::MATH::GVECTORF camGlabalPos = { .75f,.25f,-1.5f,1 };
 
-	GW::MATH::GVECTORF lightDir = { -1.0f ,-1.0f, 2.0f };
+	//GW::MATH::GVECTORF lightDir = { -1.0f ,-1.0f, 2.0f };
+	GW::MATH::GVECTORF lightDir = { -1.0f ,-1.0f, 1.0f };
+
 	GW::MATH::GVECTORF lightColor = { 0.95f ,0.9f, 0.9f,1.0f };
 	GW::MATH::GVECTORF sunAmbient = { 0.25f ,0.25f, 0.35f,1.0f };
 
@@ -356,6 +347,9 @@ class Renderer
 	std::vector < ktxVulkanTexture> tex;
 	std::vector < VkImageView> tex_view;
 
+	std::string defaultLvlPath = "../../Assets/Levels/L5/";
+
+
 	// pipeline settings for drawing (also required)
 public:
 	bool LoadTexture(std::string texturePath, ktxVulkanTexture& texture, VkImageView& textureView)
@@ -400,7 +394,7 @@ public:
 		viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 		viewInfo.flags = 0;
 		viewInfo.components = {
-			VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G,
+			VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G,//HEH? TODO
 			VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A
 		};
 		viewInfo.image = texture.image;
@@ -432,6 +426,7 @@ public:
 	}
 	void updateCamera() {
 
+		//lightDir = 
 		std::chrono::steady_clock::time_point currCall = std::chrono::steady_clock::now();
 		float elapse = std::chrono::duration_cast<std::chrono::microseconds>(currCall - lastCall).count() / 1000000.0f;
 
@@ -645,7 +640,7 @@ public:
 	void initer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GVulkanSurface _vlk) {
 		//init();	
 		if (!init) {
-			gamelevels.push_back("../../Assets/Levels/L3/");
+			gamelevels.push_back(defaultLvlPath);
 			ld1.Parse(gamelevels[0]);
 			
 		}
@@ -688,14 +683,14 @@ public:
 			smd.materials[i] = {0};
 		}
 
-		int j = 0;
+		int temp_top = 0;
 		for (auto& iter : ld1.LevelDataMap)
 		{
-			iter.second.meshId = j;
-			for (int i = 0; i < iter.second.worldMatrices.size(); ++i)
+			iter.second.meshId = temp_top;
+			for (int temp_top = 0; temp_top < iter.second.worldMatrices.size(); ++temp_top)
 			{
-				smd.matricies[j] = iter.second.worldMatrices[i];
-				j++;
+				smd.matricies[temp_top] = iter.second.worldMatrices[temp_top];
+				temp_top++;
 			}
 		}
 
@@ -1001,33 +996,44 @@ public:
 			vkUpdateDescriptorSets(device, 1, &write_descriptorset, 0, nullptr);
 
 			VkWriteDescriptorSet write_descriptorset_tex[500] = {};
-			textureFiles.push_back("../../Assets/Levels/L1/1.ktx");
-			textureFiles.push_back("../../Assets/Levels/L1/default2dtexture.ktx");
+			textureFiles.push_back("../../Assets/Levels/L5/Cube_Wood_diff.ktx");
+			textureFiles.push_back("../../Assets/Levels/L5/Cube_Wood_spec.ktx");
+			textureFiles.push_back("../../Assets/Levels/L5/Cube_Wood_nrm.ktx");
 
+			VkDescriptorImageInfo vdii[500] = {};
+			ktxVulkanTexture tempTex[500];
+			VkImageView tempView[500];
+			
 			for (size_t j = 0; j < 500; j++)
 			{
-				VkDescriptorImageInfo vdii = {};
-				ktxVulkanTexture tempTex;
-				VkImageView tempView;
+				bool texParseSuccessful = false;
+				std::string textureToBeParsed;
 
 				if (j < textureFiles.size()) {
-
-					LoadTexture(textureFiles[j].c_str(), tempTex, tempView);
+					textureToBeParsed = textureFiles[j].c_str();
 
 				}
 				else {
-					LoadTexture(textureFiles[0].c_str(), tempTex, tempView);
+					textureToBeParsed = textureFiles[0].c_str();
+				}
+
+				texParseSuccessful = LoadTexture(textureToBeParsed, tempTex[j], tempView[j]);
+
+				if (!texParseSuccessful) {
+					std::cout << "unable to parse " << textureToBeParsed << "\n";
+
 				}
 				
-				tex.push_back(tempTex);
-				tex_view.push_back(tempView);
+				
+				tex.push_back(tempTex[j]);
+				tex_view.push_back(tempView[j]);
 
-				vdii.imageLayout = tempTex.imageLayout;
-				vdii.imageView = tempView;
-				vdii.sampler = textureSampler;
+				vdii[j].imageLayout = tempTex[j].imageLayout;
+				vdii[j].imageView = tempView[j];
+				vdii[j].sampler = textureSampler;
 				//write_descriptorset.dstSet = matrixDescriptorSet[i];
 				write_descriptorset_tex[j].pBufferInfo = nullptr;
-				write_descriptorset_tex[j].pImageInfo = &vdii;
+				write_descriptorset_tex[j].pImageInfo = &vdii[j];
 				write_descriptorset_tex[j].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 				write_descriptorset_tex[j].descriptorCount = 1;
 				write_descriptorset_tex[j].dstArrayElement = j;
@@ -1035,9 +1041,11 @@ public:
 				write_descriptorset_tex[j].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 				write_descriptorset_tex[j].dstSet = matrixDescriptorSet[i];
 
+				
+
 			}
-			vkUpdateDescriptorSets(device, 500, write_descriptorset_tex, 0, nullptr);
 		
+			vkUpdateDescriptorSets(device, 500, write_descriptorset_tex, 0, nullptr);
 		}
 
 
@@ -1072,9 +1080,6 @@ public:
 		vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1,
 			&pipeline_create_info, nullptr, &pipeline);
 
-		/***************** TEXTURE DESCRIPTOR FOR FRAGMENT/PIXEL SHADER ******************/
-
-		
 		
 
 		/***************** CLEANUP / SHUTDOWN ******************/
@@ -1141,7 +1146,10 @@ public:
 		vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 		unsigned int frameCount = 0;
 		vlk.GetSwapchainImageCount(frameCount);
-		//smd.matricies[1] = world;
+		proxy.RotateXGlobalF(world, 0.0004f , world);
+		proxy.RotateYGlobalF(world, 0.0004f, world);
+
+		smd.matricies[0] = world;
 		SHADER_MODEL_DATA smd_copy = smd;
 		
 		//for (int i = 0; i < frameCount; i++) {
@@ -1168,56 +1176,35 @@ public:
 
 			}
 		}
+		//VIEWPORT STUFF
+		//scissor = { {0, 0}, {width, height} };
+		//vkCmdSetViewport(commandBuffer, 0, 1, &viewport[1]);
+		//vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+		//vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
-		scissor = { {0, 0}, {width, height} };
-		vkCmdSetViewport(commandBuffer, 0, 1, &viewport[1]);
-		vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+		//// now we can draw
+		////offsets[] = { 0 };
+		//vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertexHandle, offsets);
+		//vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+		//frameCount = 0;
+		//vlk.GetSwapchainImageCount(frameCount);
+		//for (auto iter : ld1.LevelDataMap)
+		//{
+		//	for (auto submesh : iter.second.parser.meshes)
+		//	{
 
-		// now we can draw
-		//offsets[] = { 0 };
-		vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertexHandle, offsets);
-		vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-		frameCount = 0;
-		vlk.GetSwapchainImageCount(frameCount);
-		//smd.matricies[1] = world;
-		//SHADER_MODEL_DATA smd_copy = smd;
+		//		int pushValues[] = { iter.second.meshId ,iter.second.materialId };
+		//		vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, 8, pushValues);
+		//		vkCmdDrawIndexed(commandBuffer, submesh.drawInfo.indexCount, iter.second.instanceCount, submesh.drawInfo.indexOffset, iter.second.vertexOffset, 0);
 
-		//for (int i = 0; i < frameCount; i++) {
-		//	GvkHelper::write_to_buffer(device, storageBufferMemory[i], &smd_copy, sizeof(smd_copy));
-		//	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-		//		pipelineLayout, 0, 1, &matrixDescriptorSet[i], 0, nullptr);
+		//	}
 		//}
-
-		//vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-		//	pipelineLayout, 0, 1, &descriptorSet_tex, 0, nullptr);
-
-		//GvkHelper::write_to_buffer(device, storageBufferMemory[currentBuffer], &smd, sizeof(SHADER_MODEL_DATA));
-		for (auto iter : ld1.LevelDataMap)
-		{
-			for (auto submesh : iter.second.parser.meshes)
-			{
-
-				int pushValues[] = { iter.second.meshId ,iter.second.materialId };
-				vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, 8, pushValues);
-				vkCmdDrawIndexed(commandBuffer, submesh.drawInfo.indexCount, iter.second.instanceCount, submesh.drawInfo.indexOffset, iter.second.vertexOffset, 0);
-
-			}
-		}
 		
 	}
 	
 private:
 	void CleanUp()
 	{
-		/*
-
-
-	std::vector<VkDescriptorSet> matrixDescriptorSet;
-		
-		
-		
-		*/
 
 		vkDeviceWaitIdle(device);
 		// When done using the image in Vulkan...
@@ -1244,6 +1231,8 @@ private:
 		vkFreeMemory(device, indexData, nullptr);
 		for (int i = 0; i < tex.size(); i++) {
 			ktxVulkanTexture_Destruct(&tex[i],device,nullptr);
+		}
+		for (int i = 0; i < tex_view.size(); i++) {
 			if (tex_view[i]) {
 				vkDestroyImageView(device, tex_view[i], nullptr);
 			}
@@ -1257,7 +1246,6 @@ private:
 		}
 		vkDestroyShaderModule(device, vertexShader, nullptr);
 		vkDestroyShaderModule(device, pixelShader, nullptr);
-		vkDestroyDescriptorSetLayout(device, vertexDescriptorLayout, nullptr);
 		vkDestroyDescriptorPool(device, descriptorPool, nullptr);
 		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 		vkDestroyPipeline(device, pipeline, nullptr);
