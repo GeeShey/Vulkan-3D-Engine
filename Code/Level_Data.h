@@ -45,9 +45,42 @@ public:
 
 	std::map<std::string, LEVEL_MODEL_DATA> LevelDataMap;
 	std::map<std::string, unsigned int> LevelDataMaterials;
+	std::map<int, std::string> MaterialTable;
+
+	std::map<int, std::string[3]> TextureList;
 
 	std::string GameLevel_filepath = "";
 	Parser p;
+
+	bool isTextured(H2B::MATERIAL mat,std::vector<std::string>& textures) {
+
+		bool b;
+		if (mat.map_d || mat.map_Ks || mat.bump) {
+			b = true;
+			if (mat.map_d) {
+				textures.push_back(mat.map_d);
+			}
+			else {
+				textures.push_back("NULL");
+			}
+			if (mat.bump) {
+				textures.push_back(mat.bump);
+			}
+			else {
+				textures.push_back("NULL");
+			}
+			if (mat.map_Ks) {
+				textures.push_back(mat.map_Ks);
+			}
+			else {
+				textures.push_back("NULL");
+			}
+		}
+		else {
+			b = false;
+		}
+		return b;
+	}
 
 	int Parse(std:: string _filepath) {
 		GameLevel_filepath = _filepath;
@@ -138,13 +171,15 @@ public:
 						{//material does not exist
 							LevelDataMaterials[tempData.parser.materials[i].name] = masterMaterialCount;
 							LevelDataMap[objName].materialId = masterMaterials.size();
+							MaterialTable[masterMaterials.size()] = objName;
 							masterMaterials.push_back(tempData.parser.materials[i]);
 							DEBUG_UniqueMaterialsExtracted++;
+
+
 						}
 						else {
 							LevelDataMap[objName].materialId = LevelDataMaterials[tempData.parser.materials[i].name];
 						}
-
 					}
 				}
 			}

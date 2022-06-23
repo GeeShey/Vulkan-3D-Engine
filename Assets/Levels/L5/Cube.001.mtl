@@ -10,5 +10,5 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.450000
 d 1.000000
 illum 2
-map_Bump D:\\CollegeAssignments\\test\\Vulkan-3D-Engine\\Assets\\Levels\\L5\\Cube_Wood_nrm.png
-map_Kd textures\\Cube_Wood_diff.png
+map_Bump Cube_Wood_nrm.png
+map_Kd Cube_Wood_diff.png

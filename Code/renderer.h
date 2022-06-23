@@ -1,4 +1,4 @@
-#define GATEWARE_ENABLE_CORE // All libraries need this
+﻿#define GATEWARE_ENABLE_CORE // All libraries need this
 #define GATEWARE_ENABLE_SYSTEM // Graphics libs require system level libraries
 #define GATEWARE_ENABLE_GRAPHICS // Enables all Graphics Libraries
 #define GATEWARE_ENABLE_MATH
@@ -125,98 +125,138 @@ Texture2D Map[] : register(t1);
 SamplerState qualityFilter : register(s1);
 struct OBJ_ATTRIBUTES
 {
-	float3    Kd; // diffuse reflectivity
-	float	    d; // dissolve (transparency) 
-	float3    Ks; // specular reflectivity
-	float       Ns; // specular exponent
-	float3    Ka; // ambient reflectivity
-	float       sharpness; // local reflection map sharpness
-	float3    Tf; // transmission filter
-	float       Ni; // optical density (index of refraction)
-	float3    Ke; // emissive reflectivity
-	uint    illum; // illumination model
+    float3 Kd; // diffuse reflectivity
+    float d; // dissolve (transparency) 
+    float3 Ks; // specular reflectivity
+    float Ns; // specular exponent
+    float3 Ka; // ambient reflectivity
+    float sharpness; // local reflection map sharpness
+    float3 Tf; // transmission filter
+    float Ni; // optical density (index of refraction)
+    float3 Ke; // emissive reflectivity
+    uint illum; // illumination model
 };
 
 struct SHADER_MODEL_DATA
 {
-	float4 sunDirection, sunColor,sunAmbient,camGlobalPos;
-	matrix viewMatrix, projectionMatrix;
+    float4 sunDirection, sunColor, sunAmbient, camGlobalPos;
+    matrix viewMatrix, projectionMatrix;
 
-	matrix matricies[1024];
-	OBJ_ATTRIBUTES materials[1024];
-	int filter_id;
+    matrix matricies[1024];
+    OBJ_ATTRIBUTES materials[1024];
+    int filter_id;
 
 };
 
-struct OUTPUT_TO_RASTERIZER{
-	float4 posH : SV_POSITION;
-	float3 uvw   : TEXCOORD;	
-	float3 nrmW : NORMAL;
-	float3 posw : WORLD;
+struct OUTPUT_TO_RASTERIZER
+{
+    float4 posH : SV_POSITION;
+    float3 uvw : TEXCOORD;
+    float3 nrmW : NORMAL;
+    float3 posw : WORLD;
 
 };
 
 StructuredBuffer<SHADER_MODEL_DATA> SceneData : register(b0);
 [[vk::push_constant]]
-cbuffer MESH_INDEX{
-	uint mesh_ID;
-	uint mat_ID;
+cbuffer MESH_INDEX
+{
+    uint mesh_ID;
+    uint mat_ID;
 };
 
 // an ultra simple hlsl pixel shader
+float3x3 cotangent_frame(float3 N, float3 p, float2 uv)
+{
+	// get edge vec­tors of the pix­el tri­an­gle
+    float3 dp1 = ddx(p);
+    float3 dp2 = ddy(p);
+    float2 duv1 = ddx(uv);
+    float2 duv2 = ddy(uv);
 
-float4 main(OUTPUT_TO_RASTERIZER inputVertex) : SV_TARGET 
-{	
-	float4 diff = Map[0].Sample(qualityFilter,inputVertex.uvw.xy);
-	float4 nrm  = Map[2].Sample(qualityFilter,inputVertex.uvw.xy);
-	float4 spec = Map[1].Sample(qualityFilter,inputVertex.uvw.xy);
+	// solve the lin­ear sys­tem
+    float3 dp2perp = cross(dp2, N);
+    float3 dp1perp = cross(N, dp1);
+    float3 T = dp2perp * duv1.x + dp1perp * duv2.x;
+    float3 B = dp2perp * duv1.y + dp1perp * duv2.y;
+
+	// con­struct a scale-invari­ant frame 
+
+	 
+    float invmax = rsqrt(max(dot(T, T), dot(B, B)));
+
+    return float3x3(T * invmax, B * invmax, N);
+};
+
+float3 perturb_normal(float3 N, float3 V, float2 texcoord, float3 NRM_texColor)
+{
+    float3 map = NRM_texColor;
+		map = map * 255.0f/127.0f - 128.0f/127.0f;
+		//map.z = sqrt( 1.0f -  dot( map.xy, map.xy ) );
+		//map.y = -map.y;
+    float3x3 TBN = cotangent_frame(N, -V, texcoord);
+    return normalize(mul(map,TBN));
+}
+
+
+
+float4 main(OUTPUT_TO_RASTERIZER inputVertex) : SV_TARGET
+{
+    float4 diff = Map[ mat_ID    ].Sample(qualityFilter, inputVertex.uvw.xy);
+    float4 spec = Map[ mat_ID + 1].Sample(qualityFilter, inputVertex.uvw.xy);
+    float4 nrm  = Map[ mat_ID + 2].Sample(qualityFilter, inputVertex.uvw.xy);
 	
 	//return nrm;
-	float4 finalColor;
+    float4 finalColor;
 
 	//inputVertex.nrmW = normalize(inputVertex.nrmW);
 	//SceneData[0].sunDirection = normalize(SceneData[0].sunDirection);
+    float3 VIEWDIR = normalize(SceneData[0].camGlobalPos.xyz - inputVertex.posw);
 
-	float LIGHTRATIO = saturate(dot( - normalize(SceneData[0].sunDirection), normalize(inputVertex.nrmW)));
+    float3 N = normalize(inputVertex.nrmW);
+    N = perturb_normal(N, VIEWDIR, inputVertex.uvw.xy, nrm.xyz);
+
+    float LIGHTRATIO = saturate(dot(-normalize(SceneData[0].sunDirection), normalize(N)));
 	
-	float3 SUNSURFACECOLOR,INDIRECT,DIRECT;
+    float3 SUNSURFACECOLOR, INDIRECT, DIRECT;
 
-	INDIRECT.y = SceneData[0].sunAmbient.y * diff.x;
-	INDIRECT.z = SceneData[0].sunAmbient.z * diff.y;
-	INDIRECT.x = SceneData[0].sunAmbient.x * diff.z;
+    INDIRECT.y = SceneData[0].sunAmbient.y * diff.x;
+    INDIRECT.z = SceneData[0].sunAmbient.z * diff.y;
+    INDIRECT.x = SceneData[0].sunAmbient.x * diff.z;
 
-	DIRECT.x = LIGHTRATIO * SceneData[0].sunColor.x;
-	DIRECT.y = LIGHTRATIO * SceneData[0].sunColor.y;
-	DIRECT.z = LIGHTRATIO * SceneData[0].sunColor.z;
+    DIRECT.x = LIGHTRATIO * SceneData[0].sunColor.x;
+    DIRECT.y = LIGHTRATIO * SceneData[0].sunColor.y;
+    DIRECT.z = LIGHTRATIO * SceneData[0].sunColor.z;
 
-	float3 RESULT = saturate((DIRECT + INDIRECT) * diff.xyz);
+    float3 RESULT = saturate((DIRECT + INDIRECT) * diff.xyz);
 
 
 	//return float4(RESULT, diff.a);
 
-	float3 FINAL_RESULT;
-	float3 VIEWDIR = normalize(SceneData[0].camGlobalPos.xyz - inputVertex.posw);
-	float3 HALFVECTOR = normalize(-normalize(SceneData[0].sunDirection.xyz) + VIEWDIR);
-	float INTENSITY = saturate(pow(dot(HALFVECTOR,normalize(inputVertex.nrmW)),SceneData[0].materials[mat_ID].Ns));
+    float3 FINAL_RESULT;
+    float3 HALFVECTOR = normalize(-normalize(SceneData[0].sunDirection.xyz) + VIEWDIR);
+    float INTENSITY = saturate(pow(dot(HALFVECTOR, normalize(N)), SceneData[0].materials[mat_ID].Ns));
 
-	FINAL_RESULT = RESULT + INTENSITY * spec.x ;
-	return saturate(float4(FINAL_RESULT,0)); 
+    FINAL_RESULT = RESULT + INTENSITY * spec.x *SceneData[0].materials[mat_ID].Ks ;
+    return saturate(float4(FINAL_RESULT, 0));
+
+	
 
 	//float4 normal = normalize( normalTex.rgb * 2.0 - 1.0 );
 
 	
-	float worldDot = 0;
-	worldDot = 1 - saturate(dot(normalize(inputVertex.nrmW),VIEWDIR));
+    float worldDot = 0;
+    worldDot = 1 - saturate(dot(normalize(inputVertex.nrmW), VIEWDIR));
 
 	//FINAL_RESULT.x = RESULT.x + INTENSITY * SceneData[0].materials[mesh_ID].Ks.x + worldDot;
 	//FINAL_RESULT.y = RESULT.y + INTENSITY * SceneData[0].materials[mesh_ID].Ks.y + worldDot;
 	//FINAL_RESULT.z = RESULT.z + INTENSITY * SceneData[0].materials[mesh_ID].Ks.z + worldDot;
 	//return saturate(float4(worldDot,worldDot,worldDot,0)); 
 
-	float3 dirColor;
-	dirColor.x = saturate(inputVertex.nrmW.x) ;
-	dirColor.y = saturate(inputVertex.nrmW.y) ;
-	dirColor.z = saturate(-inputVertex.nrmW.z);
+    float3 dirColor;
+    dirColor.x = saturate(inputVertex.nrmW.x);
+    dirColor.y = saturate(inputVertex.nrmW.y);
+    dirColor.z = saturate(-inputVertex.nrmW.z);
 
 	//float vignette = saturate(dot(normalize(inputVertex.posw),VIEWDIR)) * 10;
 	//float3 vignetteColor = {0.5f * vignette,0.8f * vignette,0.5f * vignette};
@@ -278,7 +318,7 @@ class Renderer
 	GW::MATH::GVECTORF camGlabalPos = { .75f,.25f,-1.5f,1 };
 
 	//GW::MATH::GVECTORF lightDir = { -1.0f ,-1.0f, 2.0f };
-	GW::MATH::GVECTORF lightDir = { -1.0f ,-1.0f, 1.0f };
+	GW::MATH::GVECTORF lightDir = { 0.0f ,-1.0f, 0.0f };
 
 	GW::MATH::GVECTORF lightColor = { 0.95f ,0.9f, 0.9f,1.0f };
 	GW::MATH::GVECTORF sunAmbient = { 0.25f ,0.25f, 0.35f,1.0f };
@@ -538,6 +578,7 @@ public:
 
 		lastCall = std::chrono::steady_clock::now();
 		smd.viewMatrix = view;
+		smd.camGlobalPos = regularCamera_copy;
 
 	}
 
@@ -996,9 +1037,34 @@ public:
 			vkUpdateDescriptorSets(device, 1, &write_descriptorset, 0, nullptr);
 
 			VkWriteDescriptorSet write_descriptorset_tex[500] = {};
-			textureFiles.push_back("../../Assets/Levels/L5/Cube_Wood_diff.ktx");
-			textureFiles.push_back("../../Assets/Levels/L5/Cube_Wood_spec.ktx");
-			textureFiles.push_back("../../Assets/Levels/L5/Cube_Wood_nrm.ktx");
+			
+
+
+			for (int i = 0; i < ld1.masterMaterials.size(); i++) {
+
+				H2B::MATERIAL mat = ld1.masterMaterials[i];
+				std::vector < std::string> mat_textures;
+				ld1.isTextured(mat, mat_textures);
+				for (int j = 0; j < 3; j++) {
+					if (mat_textures[j] == "NULL") {
+						mat_textures[j] = "default.ktx";
+					}
+					textureFiles.push_back(mat_textures[i]);
+				}
+			}
+			//for (auto iter : ld1.LevelDataMap)
+			//{
+			//	for (auto submesh : iter.second.parser.meshes)
+			//	{
+			//		extureFiles.push_back(iter.second.materialId
+			//		/*textureFiles.push_back("../../Assets/Levels/L5/earthmap1k.ktx");
+			//		textureFiles.push_back("../../Assets/Levels/L5/earthspec1k.ktx");
+			//		textureFiles.push_back("../../Assets/Levels/L5/earthnrm1k.ktx");
+			//	*/
+			//	}
+			//}
+
+			
 
 			VkDescriptorImageInfo vdii[500] = {};
 			ktxVulkanTexture tempTex[500];
@@ -1146,8 +1212,8 @@ public:
 		vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 		unsigned int frameCount = 0;
 		vlk.GetSwapchainImageCount(frameCount);
-		proxy.RotateXGlobalF(world, 0.0004f , world);
-		proxy.RotateYGlobalF(world, 0.0004f, world);
+		//proxy.RotateXGlobalF(world, 0.0003f , world);
+		//proxy.RotateYGlobalF(world, 0.0003f, world);
 
 		smd.matricies[0] = world;
 		SHADER_MODEL_DATA smd_copy = smd;
