@@ -190,7 +190,7 @@ float3 perturb_normal(float3 N, float3 V, float2 texcoord, float3 NRM_texColor)
     float3 map = NRM_texColor;
 		map = map * 255.0f/127.0f - 128.0f/127.0f;
 		//map.z = sqrt( 1.0f -  dot( map.xy, map.xy ) );
-		//map.y = -map.y;
+		map.y = -map.y;
     float3x3 TBN = cotangent_frame(N, -V, texcoord);
     return normalize(mul(map,TBN));
 }
@@ -221,7 +221,7 @@ float4 main(OUTPUT_TO_RASTERIZER inputVertex) : SV_TARGET
 		diff = Map[ textureIndex    ].Sample(qualityFilter, inputVertex.uvw.xy);
 		nrm  = Map[ textureIndex + 1].Sample(qualityFilter, inputVertex.uvw.xy) * 0.8f;
 		spec = Map[ textureIndex + 2].Sample(qualityFilter, inputVertex.uvw.xy);
-		//return float4(diff,0);
+		//return float4(spec,0);
 	}
 
 	//return nrm;
@@ -344,7 +344,7 @@ class Renderer
 	GW::MATH::GVECTORF camGlabalPos = { .75f,.25f,-1.5f,1 };
 
 	//GW::MATH::GVECTORF lightDir = { -1.0f ,-1.0f, 2.0f };
-	GW::MATH::GVECTORF lightDir = {- 1.0f ,-1.0f, 1.0f };
+	GW::MATH::GVECTORF lightDir = {-1.0f ,-1.0f, 0.0f };
 
 	GW::MATH::GVECTORF lightColor = { 0.95f ,0.9f, 0.9f,1.0f };
 	GW::MATH::GVECTORF sunAmbient = { 0.25f ,0.25f, 0.35f,1.0f };
@@ -414,8 +414,8 @@ class Renderer
 	std::vector<VkDescriptorSet> matrixDescriptorSet;
 	std::vector < ktxVulkanTexture> tex;
 	std::vector < VkImageView> tex_view;
-
-	std::string defaultLvlPath = "../../Assets/Levels/L5/";
+	
+	std::string defaultLvlPath = "../../Assets/Levels/L8/";
 
 
 	// pipeline settings for drawing (also required)
@@ -1109,8 +1109,8 @@ public:
 
 				//remove override
 
-				if (j == 1 || j == 4) {
-					textureToBeParsed = "../../Assets/Levels/L5/earthnrm1k.ktx";
+				/*if (j == 4) {
+					textureToBeParsed = "../../Assets/Levels/L8/TestNormalMap.ktx";
 				}
 				else {
 
@@ -1121,6 +1121,14 @@ public:
 					else {
 						textureToBeParsed = textureFiles[0].c_str();
 					}
+				}*/
+
+				if (j < textureFiles.size()) {
+					textureToBeParsed = textureFiles[j].c_str();
+
+				}
+				else {
+					textureToBeParsed = textureFiles[0].c_str();
 				}
 
 

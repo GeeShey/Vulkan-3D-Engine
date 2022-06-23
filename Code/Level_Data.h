@@ -218,6 +218,8 @@ public:
 							masterMaterials[masterMaterials.size()-1].map_Kd = strdup(mat.map_Kd);
 							masterMaterials[masterMaterials.size()-1].bump = strdup(mat.bump);
 							masterMaterials[masterMaterials.size()-1].map_Ks = strdup(mat.map_Ks);
+							masterMaterials[masterMaterials.size() - 1].map_Ns = strdup(mat.map_Ns);
+
 							masterMaterials[masterMaterials.size() - 1].name = strdup(mat.name);
 
 
