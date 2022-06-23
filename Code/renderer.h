@@ -344,7 +344,7 @@ class Renderer
 	GW::MATH::GVECTORF camGlabalPos = { .75f,.25f,-1.5f,1 };
 
 	//GW::MATH::GVECTORF lightDir = { -1.0f ,-1.0f, 2.0f };
-	GW::MATH::GVECTORF lightDir = {-1.0f ,-1.0f, 0.0f };
+	GW::MATH::GVECTORF lightDir = {-1.0f ,1.0f, 1.0f };
 
 	GW::MATH::GVECTORF lightColor = { 0.95f ,0.9f, 0.9f,1.0f };
 	GW::MATH::GVECTORF sunAmbient = { 0.25f ,0.25f, 0.35f,1.0f };
@@ -386,6 +386,7 @@ class Renderer
 	std::vector < std::string> textureFiles;
 
 	int multiplier = 1;
+	bool debug = true;
 
 	/***************** KTX+VULKAN TEXTURING VARIABLES ******************/
 
@@ -708,6 +709,8 @@ public:
 	}
 	void initer(GW::SYSTEM::GWindow _win, GW::GRAPHICS::GVulkanSurface _vlk) {
 		//init();	
+
+		textureFiles.clear();
 		if (!init) {
 			gamelevels.push_back(defaultLvlPath);
 			ld1.Parse(gamelevels[0]);
@@ -1107,7 +1110,7 @@ public:
 				bool texParseSuccessful = false;
 				std::string textureToBeParsed;
 
-				//remove override
+				//DEBUG
 
 				/*if (j == 4) {
 					textureToBeParsed = "../../Assets/Levels/L8/TestNormalMap.ktx";
@@ -1262,6 +1265,8 @@ public:
 		unsigned int frameCount = 0;
 		vlk.GetSwapchainImageCount(frameCount);
 		//proxy.RotateXGlobalF(world, 0.0003f , world);
+
+		if(debug)
 		proxy.RotateYGlobalF(world, 0.0003f, world);
 		//proxy.RotateYGlobalF(lightDir, 0.0003f, lightDir);
 		
