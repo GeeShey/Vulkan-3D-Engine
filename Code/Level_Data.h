@@ -30,7 +30,7 @@ public:
 		H2B::Parser parser;
 		unsigned int indexOffset = 0;//UNUSED
 		unsigned int vertexOffset = 0;
-		unsigned int materialId = 0;
+		int materialId = 0;
 		int meshId = 0;
 		std::string filepath ="";
 	};
@@ -39,12 +39,14 @@ public:
 	std::vector<H2B::VERTEX> masterVertices;
 	std::vector<H2B::MATERIAL> masterMaterials;
 
+	H2B::MATERIAL defaultMat;
+
 	std::vector<UINT> masterIndices;
 	unsigned int masterIndicesCount = 0;
 	unsigned int masterMaterialCount = 0;
 
 	std::map<std::string, LEVEL_MODEL_DATA> LevelDataMap;
-	std::map<std::string, unsigned int> LevelDataMaterials;
+	std::map<std::string, int> LevelDataMaterials;
 	std::map<int, std::string> MaterialTable;
 
 	std::map<int, std::string[3]> TextureList;
@@ -52,37 +54,68 @@ public:
 	std::string GameLevel_filepath = "";
 	Parser p;
 
-	bool isTextured(H2B::MATERIAL mat,std::vector<std::string>& textures) {
+	bool getTexturesFromMaterial(H2B::MATERIAL mat,std::vector<std::string>& textures) {
 
 		bool b;
-		if (mat.map_d || mat.map_Ks || mat.bump) {
+		if (mat.map_Kd || mat.map_Ks || mat.bump) {
 			b = true;
-			if (mat.map_d) {
-				textures.push_back(mat.map_d);
+			if (mat.map_Kd) {
+				std::string temp = std::string(mat.map_Kd);
+				std::string tempGamePath = GameLevel_filepath;
+
+				size_t lastindex = (temp.find_last_of("."));
+				temp = temp.substr(0, lastindex);
+				textures.push_back(tempGamePath.append(temp).append(".ktx"));
 			}
 			else {
-				textures.push_back("NULL");
+				textures.push_back("../../Assets/Levels/default_diff.ktx");
 			}
-			if (mat.bump) {
-				textures.push_back(mat.bump);
+			if (mat.map_Ns) {
+				std::string temp = std::string(mat.map_Ns);
+				std::string tempGamePath = GameLevel_filepath;
+
+				size_t lastindex = (temp.find_last_of("."));
+				temp = temp.substr(0, lastindex);
+				textures.push_back(tempGamePath.append(temp).append(".ktx"));
 			}
 			else {
-				textures.push_back("NULL");
+				textures.push_back("../../Assets/Levels/default_nrm.ktx");
 			}
 			if (mat.map_Ks) {
-				textures.push_back(mat.map_Ks);
+				std::string temp = std::string(mat.map_Ks);
+				std::string tempGamePath = GameLevel_filepath;
+
+				size_t lastindex = (temp.find_last_of("."));
+				temp = temp.substr(0, lastindex);
+				textures.push_back(tempGamePath.append(temp).append(".ktx"));
 			}
 			else {
-				textures.push_back("NULL");
+				textures.push_back("../../Assets/Levels/default_spec.ktx");
 			}
 		}
 		else {
-			b = false;
+			for (int j = 0; j < 3; j++) {
+				textures.push_back("../../Assets/Levels/default_diff.ktx");
+			}
+				b = false;
 		}
 		return b;
 	}
 
+	bool isTextured(H2B::MATERIAL mat) {
+
+		if (mat.map_Kd || mat.map_Ks || mat.bump) {
+			return true;
+			
+		}
+		else {
+			return false;
+		}
+	}
+
 	int Parse(std:: string _filepath) {
+		defaultMat = { 0 };
+		masterMaterials.push_back(defaultMat);
 		GameLevel_filepath = _filepath;
 		int VertOffset = 0;
 		int IdxOffset = 0;
@@ -163,22 +196,39 @@ public:
 						DEBUG_VisibleVertexCount += LevelDataMap[objName].parser.vertexCount;
 						
 					}
-
 					for (int i = 0; i < tempData.parser.materialCount; i++) {
+
 						H2B::MATERIAL mat = tempData.parser.materials[i];
 						auto iter3 = LevelDataMaterials.find(mat.name);
 						if (iter3 == LevelDataMaterials.end())
 						{//material does not exist
-							LevelDataMaterials[tempData.parser.materials[i].name] = masterMaterialCount;
-							LevelDataMap[objName].materialId = masterMaterials.size();
+							int matId = masterMaterials.size();
+							if (!isTextured(mat)) {
+								matId *= -1;
+
+							}
+							LevelDataMaterials[tempData.parser.materials[i].name] = matId;
+							LevelDataMap.at(objName).materialId = matId;
+							
+							
 							MaterialTable[masterMaterials.size()] = objName;
-							masterMaterials.push_back(tempData.parser.materials[i]);
+
+
+							masterMaterials.push_back(mat);
+							masterMaterials[masterMaterials.size()-1].map_Kd = strdup(mat.map_Kd);
+							masterMaterials[masterMaterials.size()-1].bump = strdup(mat.bump);
+							masterMaterials[masterMaterials.size()-1].map_Ks = strdup(mat.map_Ks);
+							masterMaterials[masterMaterials.size() - 1].name = strdup(mat.name);
+
+
+
+
 							DEBUG_UniqueMaterialsExtracted++;
 
 
 						}
 						else {
-							LevelDataMap[objName].materialId = LevelDataMaterials[tempData.parser.materials[i].name];
+							LevelDataMap[objName].materialId = LevelDataMaterials[mat.name];
 						}
 					}
 				}

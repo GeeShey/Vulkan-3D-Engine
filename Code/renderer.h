@@ -54,7 +54,7 @@ StructuredBuffer<SHADER_MODEL_DATA> SceneData : register(b0);
 [[vk::push_constant]]
 cbuffer MESH_INDEX{
 	uint mesh_ID;
-	uint mat_ID;
+	int mat_ID_uniform;
 };
 struct VERT_IN{
 
@@ -112,9 +112,6 @@ OUTPUT_TO_RASTERIZER main(VERT_IN inputVertex)
 	//output.sunAmbient
 	return output;
 
-		// TODO: Part 4e
-	// TODO: Part 4b
-		// TODO: Part 4e
 }
 )";
 // Simple Pixel Shader
@@ -162,7 +159,7 @@ StructuredBuffer<SHADER_MODEL_DATA> SceneData : register(b0);
 cbuffer MESH_INDEX
 {
     uint mesh_ID;
-    uint mat_ID;
+    int mat_ID_uniform;
 };
 
 // an ultra simple hlsl pixel shader
@@ -202,10 +199,31 @@ float3 perturb_normal(float3 N, float3 V, float2 texcoord, float3 NRM_texColor)
 
 float4 main(OUTPUT_TO_RASTERIZER inputVertex) : SV_TARGET
 {
-    float4 diff = Map[ mat_ID    ].Sample(qualityFilter, inputVertex.uvw.xy);
-    float4 spec = Map[ mat_ID + 1].Sample(qualityFilter, inputVertex.uvw.xy);
-    float4 nrm  = Map[ mat_ID + 2].Sample(qualityFilter, inputVertex.uvw.xy);
-	
+	int mat_ID = 0;
+	int isTextured = 0;
+	if(mat_ID_uniform < 0){
+		isTextured = 0;
+		mat_ID =-1 * mat_ID_uniform;
+	}
+	else{
+		mat_ID = mat_ID_uniform;	
+		isTextured = 1;
+		//return float4(1,1,1,1);
+	}
+	int textureIndex = mat_ID * 3;
+
+	float3 diff =  SceneData[0].materials[mat_ID].Kd;
+    float3 spec =  SceneData[0].materials[mat_ID].Ks;
+    float3 nrm  =  inputVertex.nrmW;
+
+	if(isTextured == 1){
+
+		diff = Map[ textureIndex    ].Sample(qualityFilter, inputVertex.uvw.xy);
+		nrm  = Map[ textureIndex + 1].Sample(qualityFilter, inputVertex.uvw.xy) * 0.8f;
+		spec = Map[ textureIndex + 2].Sample(qualityFilter, inputVertex.uvw.xy);
+		//return float4(diff,0);
+	}
+
 	//return nrm;
     float4 finalColor;
 
@@ -215,6 +233,11 @@ float4 main(OUTPUT_TO_RASTERIZER inputVertex) : SV_TARGET
 
     float3 N = normalize(inputVertex.nrmW);
     N = perturb_normal(N, VIEWDIR, inputVertex.uvw.xy, nrm.xyz);
+
+	if(isTextured==0)
+	{
+		N = nrm;
+	}
 
     float LIGHTRATIO = saturate(dot(-normalize(SceneData[0].sunDirection), normalize(N)));
 	
@@ -229,7 +252,10 @@ float4 main(OUTPUT_TO_RASTERIZER inputVertex) : SV_TARGET
     DIRECT.z = LIGHTRATIO * SceneData[0].sunColor.z;
 
     float3 RESULT = saturate((DIRECT + INDIRECT) * diff.xyz);
-
+	//if(isTextured==0)
+	//{
+	//	return float4(RESULT,0);
+	//}
 
 	//return float4(RESULT, diff.a);
 
@@ -318,7 +344,7 @@ class Renderer
 	GW::MATH::GVECTORF camGlabalPos = { .75f,.25f,-1.5f,1 };
 
 	//GW::MATH::GVECTORF lightDir = { -1.0f ,-1.0f, 2.0f };
-	GW::MATH::GVECTORF lightDir = { 0.0f ,-1.0f, 0.0f };
+	GW::MATH::GVECTORF lightDir = {- 1.0f ,-1.0f, 1.0f };
 
 	GW::MATH::GVECTORF lightColor = { 0.95f ,0.9f, 0.9f,1.0f };
 	GW::MATH::GVECTORF sunAmbient = { 0.25f ,0.25f, 0.35f,1.0f };
@@ -358,6 +384,8 @@ class Renderer
 	float f1;
 	SHADER_MODEL_DATA smd = {0};
 	std::vector < std::string> textureFiles;
+
+	int multiplier = 1;
 
 	/***************** KTX+VULKAN TEXTURING VARIABLES ******************/
 
@@ -727,10 +755,10 @@ public:
 		int temp_top = 0;
 		for (auto& iter : ld1.LevelDataMap)
 		{
-			iter.second.meshId = temp_top;
-			for (int temp_top = 0; temp_top < iter.second.worldMatrices.size(); ++temp_top)
+			iter.second.meshId = temp_top;//NEED TO FIX BUG
+			for (int k = 0; k < iter.second.worldMatrices.size(); ++k)
 			{
-				smd.matricies[temp_top] = iter.second.worldMatrices[temp_top];
+				smd.matricies[k] = iter.second.worldMatrices[k];
 				temp_top++;
 			}
 		}
@@ -1044,12 +1072,16 @@ public:
 
 				H2B::MATERIAL mat = ld1.masterMaterials[i];
 				std::vector < std::string> mat_textures;
-				ld1.isTextured(mat, mat_textures);
+				std::string nuul = "NULL";
+				ld1.getTexturesFromMaterial(mat, mat_textures);
 				for (int j = 0; j < 3; j++) {
-					if (mat_textures[j] == "NULL") {
-						mat_textures[j] = "default.ktx";
+					/*if (mat_textures[j] == "NULL") {
+						mat_textures[j] = "../../Assets/Levels/default_diff.ktx";
 					}
-					textureFiles.push_back(mat_textures[i]);
+					else {
+						int debug = 0;
+					}*/
+					textureFiles.push_back(mat_textures[j]);
 				}
 			}
 			//for (auto iter : ld1.LevelDataMap)
@@ -1075,13 +1107,22 @@ public:
 				bool texParseSuccessful = false;
 				std::string textureToBeParsed;
 
-				if (j < textureFiles.size()) {
-					textureToBeParsed = textureFiles[j].c_str();
+				//remove override
 
+				if (j == 1 || j == 4) {
+					textureToBeParsed = "../../Assets/Levels/L5/earthnrm1k.ktx";
 				}
 				else {
-					textureToBeParsed = textureFiles[0].c_str();
+
+					if (j < textureFiles.size()) {
+						textureToBeParsed = textureFiles[j].c_str();
+
+					}
+					else {
+						textureToBeParsed = textureFiles[0].c_str();
+					}
 				}
+
 
 				texParseSuccessful = LoadTexture(textureToBeParsed, tempTex[j], tempView[j]);
 
@@ -1213,7 +1254,22 @@ public:
 		unsigned int frameCount = 0;
 		vlk.GetSwapchainImageCount(frameCount);
 		//proxy.RotateXGlobalF(world, 0.0003f , world);
-		//proxy.RotateYGlobalF(world, 0.0003f, world);
+		proxy.RotateYGlobalF(world, 0.0003f, world);
+		//proxy.RotateYGlobalF(lightDir, 0.0003f, lightDir);
+		
+		/*float deltaForce = 0.001f;
+		if (lightDir.x <= -1.0f) {
+			multiplier = 1;
+
+		}
+		if (lightDir.x >= 1.0f) {
+			multiplier = -1;
+
+		}
+
+		lightDir.x += deltaForce * multiplier;*/
+
+
 
 		smd.matricies[0] = world;
 		SHADER_MODEL_DATA smd_copy = smd;
