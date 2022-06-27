@@ -24,7 +24,7 @@ public:
             
             std::wstring stemp = std::wstring(initialMsg.begin(), initialMsg.end());
             LPCWSTR sw = stemp.c_str();
-            MessageBoxW(NULL, sw, L"File Path", MB_OK);
+            //MessageBoxW(NULL, sw, L"File Path", MB_OK);
             IFileOpenDialog* pFileOpen;
             // Create the FileOpenDialog object.
             hr = CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_ALL,
@@ -48,7 +48,7 @@ public:
                         // Display the file name to the user.
                         if (SUCCEEDED(hr))
                         {
-                            MessageBoxW(NULL, pszFilePath, L"File Path", MB_OK);
+                            //MessageBoxW(NULL, pszFilePath, L"File Path", MB_OK);
                             char str[256];
                             wcstombs(str, pszFilePath, 128);
                             userDefinedFilePath = std::string(str);

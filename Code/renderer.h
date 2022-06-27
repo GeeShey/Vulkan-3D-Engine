@@ -219,7 +219,7 @@ float4 main(OUTPUT_TO_RASTERIZER inputVertex) : SV_TARGET
 	if(isTextured == 1){
 
 		diff = Map[ textureIndex    ].Sample(qualityFilter, inputVertex.uvw.xy);
-		nrm  = Map[ textureIndex + 1].Sample(qualityFilter, inputVertex.uvw.xy) * 0.8f;
+		nrm  = Map[ textureIndex + 1].Sample(qualityFilter, inputVertex.uvw.xy);
 		spec = Map[ textureIndex + 2].Sample(qualityFilter, inputVertex.uvw.xy);
 		//return float4(spec,0);
 	}
@@ -261,9 +261,11 @@ float4 main(OUTPUT_TO_RASTERIZER inputVertex) : SV_TARGET
 
     float3 FINAL_RESULT;
     float3 HALFVECTOR = normalize(-normalize(SceneData[0].sunDirection.xyz) + VIEWDIR);
+    //float INTENSITY = saturate(pow(dot(HALFVECTOR, normalize(N)), spec));
     float INTENSITY = saturate(pow(dot(HALFVECTOR, normalize(N)), SceneData[0].materials[mat_ID].Ns));
 
-    FINAL_RESULT = RESULT + INTENSITY * spec.x *SceneData[0].materials[mat_ID].Ks ;
+
+    FINAL_RESULT = RESULT + INTENSITY * spec.x;
     return saturate(float4(FINAL_RESULT, 0));
 
 	
@@ -344,12 +346,18 @@ class Renderer
 	GW::MATH::GVECTORF camGlabalPos = { .75f,.25f,-1.5f,1 };
 
 	//GW::MATH::GVECTORF lightDir = { -1.0f ,-1.0f, 2.0f };
-	GW::MATH::GVECTORF lightDir = {-1.0f ,1.0f, 1.0f };
+	//GW::MATH::GVECTORF lightDir = {0.0f ,-1.0f,- 1.0f };
+	// EARTH PREVIEW
+	//GW::MATH::GVECTORF lightDir = { 1.0f ,-1.0f, 1.0f };
+	//CHURCH PREVIEW
+	GW::MATH::GVECTORF lightDir = { -0.1f ,-0.1f, -1.0f };
+
+
 
 	GW::MATH::GVECTORF lightColor = { 0.95f ,0.9f, 0.9f,1.0f };
 	GW::MATH::GVECTORF sunAmbient = { 0.25f ,0.25f, 0.35f,1.0f };
 
-	bool initDone = false;
+	//bool initDone = false;
 
 	float worldRot = 0,aspectRatio = 0;
 
@@ -375,7 +383,7 @@ class Renderer
 	bool BufferUpdateNeeded = false;
 	bool init = false;
 
-	float N,Num1,Num2, Num3, Num4, Num5, Num6, Num7, Num8, Num9;
+	float N,M,Num1,Num2, Num3, Num4, Num5, Num6, Num7, Num8, Num9;
 
 	GW::SYSTEM::GWindow win_main;
 	GW::GRAPHICS::GVulkanSurface vlk_main;
@@ -386,7 +394,9 @@ class Renderer
 	std::vector < std::string> textureFiles;
 
 	int multiplier = 1;
-	bool debug = true;
+	bool debug = false;
+
+	bool viewPortEnabled = false;
 
 	/***************** KTX+VULKAN TEXTURING VARIABLES ******************/
 
@@ -415,9 +425,28 @@ class Renderer
 	std::vector<VkDescriptorSet> matrixDescriptorSet;
 	std::vector < ktxVulkanTexture> tex;
 	std::vector < VkImageView> tex_view;
-	
-	std::string defaultLvlPath = "../../Assets/Levels/L8/";
+	//std::vector < GW::MATH::GVECTORF> lightDirs = { 
+	//	{ 1.0f ,-1.0f, 1.0f },
+	//	{ 1.0f ,-1.0f, 1.0f },
+	//	{ 1.0f ,-1.0f, 1.0f },
+	//	{ 1.0f ,-1.0f, 1.0f },
+	//	{ 1.0f ,-1.0f, 1.0f },
+	//	{ 1.0f ,-1.0f, 1.0f },
+	//	{ 1.0f ,-1.0f, 1.0f },
+	//	{ 0.0f ,-1.0f, -1.0f },
+	//	{ 1.0f ,-1.0f, 1.0f },
+	//	{ 1.0f ,-1.0f, 1.0f },
+	//	{ 1.0f ,-1.0f, 1.0f }
+	//};
 
+	
+	std::string defaultLvlPath = "../../Assets/Levels/L";
+	//3 church
+	//4 demo
+	//5 earth debug = true
+	//6 materials
+	//7 cartoon
+	//8 normal test debug = true
 
 	// pipeline settings for drawing (also required)
 public:
@@ -514,6 +543,8 @@ public:
 		inputProxy.GetState(G_KEY_S, S);
 		inputProxy.GetState(G_KEY_D, D);
 		inputProxy.GetState(G_KEY_N, N);
+		inputProxy.GetState(G_KEY_M, M);
+
 
 		inputProxy.GetState(G_KEY_1, Num1);
 		inputProxy.GetState(G_KEY_2, Num2);
@@ -528,6 +559,10 @@ public:
 		inputProxy.GetState(G_KEY_F1, f1);
 		if (f1 > 0.0f) {
 			f1_pressed();
+		}
+
+		if (M > 0.0f) {
+			viewPortEnabled = !viewPortEnabled;
 		}
 
 
@@ -714,7 +749,7 @@ public:
 		if (!init) {
 			gamelevels.push_back(defaultLvlPath);
 			ld1.Parse(gamelevels[0]);
-			
+
 		}
 
 		win = _win;
@@ -901,9 +936,18 @@ public:
 		input_vertex_info.vertexAttributeDescriptionCount = 3;
 		input_vertex_info.pVertexAttributeDescriptions = vertex_attribute_description;
 		// Viewport State (we still need to set this up even though we will overwrite the values)
+
+		float viewPortW = static_cast<float>(width);
+		float viewPortH = static_cast<float>(height);
+
+		if (viewPortEnabled) {
+			viewPortH /= 2;
+		}
+
+
 		VkViewport viewport[2];
 		viewport[0] = {
-			0, static_cast<float>(height/2), static_cast<float>(width), static_cast<float>(height), 0, 1
+			0, viewPortH, viewPortW, static_cast<float>(height), 0, 1
 		};
 
 		viewport[1] = {
@@ -1033,9 +1077,9 @@ public:
 		// Set the struct values
 		samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
 		samplerInfo.flags = 0;
-		samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER; // REPEAT IS COMMON
-		samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-		samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+		samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT; // REPEAT IS COMMON
+		samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 		samplerInfo.magFilter = VK_FILTER_LINEAR;
 		samplerInfo.minFilter = VK_FILTER_LINEAR;
 		samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
@@ -1214,6 +1258,32 @@ public:
 		//f1_pressed();
 		win_main = _win;
 		vlk_main = _vlk;
+
+		std::cout << "Enter Scene Number to load: \n";
+		std::cout << "\n3. church( diff + spec + nrm)";
+		std::cout << "\n4. cartoon scene(flat shaded)";
+		std::cout << "\n5. globe spinning( diff + spec + nrm)";
+		std::cout << "\n6. materials flexibility( diff + spec + nrm)";
+		std::cout << "\n7. cartoon scene(difff)";
+		std::cout << "\n8. normal map test(nrm)\n";
+
+		//4\n demo
+		//5\n earth debug = true
+		//6\n materials
+		//7\n cartoon
+		//8\n normal test debug = true
+		int x;
+		std::cin >> x;
+
+		if (x == 5 || x == 8) {
+			debug = true;
+
+		}
+
+		
+		std::string temp = std::to_string(x).append("/");
+		defaultLvlPath.append(temp);
+
 		initer(win_main, vlk_main);
 		init = true;
 		
@@ -1222,18 +1292,19 @@ public:
 	
 	void Render()
 	{
-		
+
 		checkInput();
 
 		if (BufferUpdateNeeded) {
-			
+
 			CleanUp();
 			Level_Data temp;
+			debug = false;
 			temp.Parse(gamelevels[levelSelected - 1]);
 			ld1 = temp;
- 			initer(win_main,vlk_main);
-			
-			
+			initer(win_main, vlk_main);
+
+
 			BufferUpdateNeeded = false;
 		}
 
@@ -1247,17 +1318,25 @@ public:
 		win.GetClientHeight(height);
 		// setup the pipeline's dynamic settings
 		VkViewport viewport[2];
-		viewport [0] = {
-            0, 0, static_cast<float>(width), static_cast<float>(height), 0, 1
-        };
-		viewport[1] = {
-			0, static_cast<float>(height/2), static_cast<float>(width), static_cast<float>(height/2), 0, 1
+
+		float viewPortW = static_cast<float>(width);
+		float viewPortH = static_cast<float>(height);
+
+		if (viewPortEnabled) {
+			viewPortH /= 2;
+		}
+
+		viewport[0] = {
+			0, 0, viewPortW, viewPortH, 0, 1
 		};
-        VkRect2D scissor = { {0, 0}, {width, height} };
+		viewport[1] = {
+			0, static_cast<float>(height / 2), static_cast<float>(width), static_cast<float>(height / 2), 0, 1
+		};
+		VkRect2D scissor = { {0, 0}, {width, height} };
 		vkCmdSetViewport(commandBuffer, 0, 1, &viewport[0]);
 		vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-		
+
 		// now we can draw
 		VkDeviceSize offsets[] = { 0 };
 		vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertexHandle, offsets);
@@ -1266,10 +1345,10 @@ public:
 		vlk.GetSwapchainImageCount(frameCount);
 		//proxy.RotateXGlobalF(world, 0.0003f , world);
 
-		if(debug)
-		proxy.RotateYGlobalF(world, 0.0003f, world);
+		if (debug)
+			proxy.RotateYGlobalF(world, 0.0003f, world);
 		//proxy.RotateYGlobalF(lightDir, 0.0003f, lightDir);
-		
+
 		/*float deltaForce = 0.001f;
 		if (lightDir.x <= -1.0f) {
 			multiplier = 1;
@@ -1286,9 +1365,9 @@ public:
 
 		smd.matricies[0] = world;
 		SHADER_MODEL_DATA smd_copy = smd;
-		
+
 		//for (int i = 0; i < frameCount; i++) {
-			GvkHelper::write_to_buffer(device, storageBufferMemory[currentBuffer], &smd_copy, sizeof(smd_copy));
+		GvkHelper::write_to_buffer(device, storageBufferMemory[currentBuffer], &smd_copy, sizeof(smd_copy));
 		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
 			pipelineLayout, 0, 1, &matrixDescriptorSet[currentBuffer], 0, nullptr);
 		//}
@@ -1311,29 +1390,32 @@ public:
 
 			}
 		}
+
+		if (viewPortEnabled) {
 		//VIEWPORT STUFF
-		//scissor = { {0, 0}, {width, height} };
-		//vkCmdSetViewport(commandBuffer, 0, 1, &viewport[1]);
-		//vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-		//vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+			scissor = { {0, 0}, {width, height} };
+			vkCmdSetViewport(commandBuffer, 0, 1, &viewport[1]);
+			vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+			vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
-		//// now we can draw
-		////offsets[] = { 0 };
-		//vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertexHandle, offsets);
-		//vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-		//frameCount = 0;
-		//vlk.GetSwapchainImageCount(frameCount);
-		//for (auto iter : ld1.LevelDataMap)
-		//{
-		//	for (auto submesh : iter.second.parser.meshes)
-		//	{
+			// now we can draw
+			//offsets[] = { 0 };
+			vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertexHandle, offsets);
+			vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+			frameCount = 0;
+			vlk.GetSwapchainImageCount(frameCount);
+			for (auto iter : ld1.LevelDataMap)
+			{
+				for (auto submesh : iter.second.parser.meshes)
+				{
 
-		//		int pushValues[] = { iter.second.meshId ,iter.second.materialId };
-		//		vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, 8, pushValues);
-		//		vkCmdDrawIndexed(commandBuffer, submesh.drawInfo.indexCount, iter.second.instanceCount, submesh.drawInfo.indexOffset, iter.second.vertexOffset, 0);
+					int pushValues[] = { iter.second.meshId ,iter.second.materialId };
+					vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, 8, pushValues);
+					vkCmdDrawIndexed(commandBuffer, submesh.drawInfo.indexCount, iter.second.instanceCount, submesh.drawInfo.indexOffset, iter.second.vertexOffset, 0);
 
-		//	}
-		//}
+				}
+			}
+		}
 		
 	}
 	

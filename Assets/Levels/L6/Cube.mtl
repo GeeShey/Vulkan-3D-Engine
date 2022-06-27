@@ -12,3 +12,4 @@ d 1.000000
 illum 2
 map_Kd Cube_Wood_diff.png
 map_Ks Cube_Wood_spec.jpg
+map_Ns Cube_Wood_nrm.png

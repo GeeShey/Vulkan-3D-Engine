@@ -1,22 +1,15 @@
 # Blender MTL File: 'untitled.blend'
-# Material Count: 2
+# Material Count: 1
 
-newmtl Metal
+newmtl OakBark
 Ns 225.000000
 Ka 1.000000 1.000000 1.000000
 Kd 0.800000 0.800000 0.800000
-Ks 0.041667 0.041667 0.041667
+Ks 0.500000 0.500000 0.500000
 Ke 0.000000 0.000000 0.000000
-Ni 1.000000
+Ni 1.450000
 d 1.000000
 illum 2
-
-newmtl RoofTiles3.001
-Ns 225.000000
-Ka 1.000000 1.000000 1.000000
-Kd 0.854978 0.705459 0.683533
-Ks 0.000000 0.000000 0.000000
-Ke 0.000000 0.000000 0.000000
-Ni 1.000000
-d 1.000000
-illum 1
+map_Kd RoofTiles3.jpg
+map_Ks RoofTiles3_spec.png
+map_Ns RoofTiles3_nrm.png

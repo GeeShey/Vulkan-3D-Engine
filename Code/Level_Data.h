@@ -135,6 +135,12 @@ public:
 
 					std::getline(ifs, line);
 					std::string objName = line;
+					//size_t dotIndex = objName.find_last_of(".");
+
+					/*if (dotIndex != -1) {
+						objName = objName.substr(0, dotIndex);
+					}*/
+
 					std::string objFilePath = GameLevel_filepath;
 					objFilePath = objFilePath.append(line);
 					objFilePath = objFilePath.append(".h2b");
@@ -244,28 +250,28 @@ public:
 			//	iterMeshId += iter.second.worldMatrices.size();
 			//}
 
-			std::cout << "No of .h2b files parsed = " << DEBUG_FileParsedCount << "\n";
-			std::cout << "No of unique materials extracted = " << DEBUG_UniqueMaterialsExtracted << "\n";
-			std::cout << "No of meshses parsed(exclusing submeshes) = " << DEBUG_MeshesParsed << "\n";
-			std::cout << "No of unique submeshes parsed = " << DEBUG_SubMeshesParsed << "\n";
-			std::cout << "No of vertices visible in scene = " << DEBUG_VisibleVertexCount << "\n";
-			std::cout << "No of vertices uploaded to buffer = " << masterVertices.size() << "\n";
-			std::cout << "No of instanced meshes = " << DEBUG_InstancedMeshes << "\n";
+			//std::cout << "No of .h2b files parsed = " << DEBUG_FileParsedCount << "\n";
+			//std::cout << "No of unique materials extracted = " << DEBUG_UniqueMaterialsExtracted << "\n";
+			//std::cout << "No of meshses parsed(exclusing submeshes) = " << DEBUG_MeshesParsed << "\n";
+			//std::cout << "No of unique submeshes parsed = " << DEBUG_SubMeshesParsed << "\n";
+			//std::cout << "No of vertices visible in scene = " << DEBUG_VisibleVertexCount << "\n";
+			//std::cout << "No of vertices uploaded to buffer = " << masterVertices.size() << "\n";
+			//std::cout << "No of instanced meshes = " << DEBUG_InstancedMeshes << "\n";
+			//
+			//std::cout << "\n\n--------------------\n";
+			//std::cout << "Instance Report (Original Mesh Draw calls do not count as instances)\n";
+			//std::cout << "--------------------\n";
 
-			std::cout << "\n\n--------------------\n";
-			std::cout << "Instance Report (Original Mesh Draw calls do not count as instances)\n";
-			std::cout << "--------------------\n";
+			//for (auto i : LevelDataMap)
+			//{
+			//	if (i.second.instanceCount > 1) {
+			//		std::cout << i.first.c_str() << " is being instanced " << i.second.instanceCount -1 << " times\n";
+			//	}
+			//}
 
-			for (auto i : LevelDataMap)
-			{
-				if (i.second.instanceCount > 1) {
-					std::cout << i.first.c_str() << " is being instanced " << i.second.instanceCount -1 << " times\n";
-				}
-			}
-
-			std::cout << "--------------------\n";
-			std::cout << "Instance Report Complete\n";
-			std::cout << "--------------------\n";
+			//std::cout << "--------------------\n";
+			//std::cout << "Instance Report Complete\n";
+			//std::cout << "--------------------\n";
 
 
 		}
