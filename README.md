@@ -10,3 +10,8 @@ Feature List
   - normal
 - lighting support
 - flexible pixel + vertex shader support
+
+Instructions:
+Execute the .sln file( the .exe file located in the release folder has path conflicts) 
+enter numbers 3-8 depending on the scene you wish to load oon the console window.
+press enter on the console
